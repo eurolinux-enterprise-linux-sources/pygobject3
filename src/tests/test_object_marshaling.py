@@ -10,11 +10,6 @@ import warnings
 from gi.repository import GObject
 from gi.repository import GIMarshallingTests
 
-try:
-    from gi.repository import Regress
-except ImportError:
-    Regress = None
-
 
 class StrongRef(object):
     # A class that behaves like weakref.ref but holds a strong reference.
@@ -92,6 +87,9 @@ class VFuncsBase(GIMarshallingTests.Object):
         self.in_object_is_floating = obj.is_floating()
 
 
+@unittest.skipUnless(hasattr(VFuncsBase, 'get_ref_info_for_vfunc_return_object_transfer_none') and
+                     hasattr(VFuncsBase, 'get_ref_info_for_vfunc_out_object_transfer_none'),
+                     'too old gobject-introspection')
 class TestVFuncsWithObjectArg(unittest.TestCase):
     # Basic set of tests which work on non-floating objects which python does
     # not keep an additional reference of.
@@ -202,6 +200,9 @@ class TestVFuncsWithObjectArg(unittest.TestCase):
         self.assertTrue(vfuncs.object_ref() is None)
 
 
+@unittest.skipUnless(hasattr(VFuncsBase, 'get_ref_info_for_vfunc_return_object_transfer_none') and
+                     hasattr(VFuncsBase, 'get_ref_info_for_vfunc_out_object_transfer_none'),
+                     'too old gobject-introspection')
 class TestVFuncsWithFloatingArg(unittest.TestCase):
     # All tests here work with a floating object by using InitiallyUnowned as the argument
 
@@ -289,6 +290,9 @@ class TestVFuncsWithFloatingArg(unittest.TestCase):
         self.assertTrue(vfuncs.object_ref() is None)
 
 
+@unittest.skipUnless(hasattr(VFuncsBase, 'get_ref_info_for_vfunc_return_object_transfer_none') and
+                     hasattr(VFuncsBase, 'get_ref_info_for_vfunc_out_object_transfer_none'),
+                     'too old gobject-introspection')
 class TestVFuncsWithHeldObjectArg(unittest.TestCase):
     # Same tests as TestVFuncsWithObjectArg except we hold
     # onto the python object reference in all cases.
@@ -418,6 +422,9 @@ class TestVFuncsWithHeldObjectArg(unittest.TestCase):
         self.assertTrue(held_object_ref() is None)
 
 
+@unittest.skipUnless(hasattr(VFuncsBase, 'get_ref_info_for_vfunc_return_object_transfer_none') and
+                     hasattr(VFuncsBase, 'get_ref_info_for_vfunc_out_object_transfer_none'),
+                     'too old gobject-introspection')
 class TestVFuncsWithHeldFloatingArg(unittest.TestCase):
     # Tests for a floating object which we hold a reference to the python wrapper
     # on the VFuncs test class.
@@ -540,31 +547,71 @@ class TestVFuncsWithHeldFloatingArg(unittest.TestCase):
         self.assertTrue(held_object_ref() is None)
 
 
-@unittest.skipIf(Regress is None, 'Regress is required')
-class TestArgumentTypeErrors(unittest.TestCase):
-    def test_object_argument_type_error(self):
-        # ensure TypeError is raised for things which are not GObjects
-        obj = Regress.TestObj()
-        obj.set_bare(GObject.Object())
-        obj.set_bare(None)
+@unittest.skipUnless(hasattr(GIMarshallingTests.PropertiesObject.props, 'some_object'),
+                     'too old gobject-introspection')
+class TestPropertyHoldingObject(unittest.TestCase):
+    def test_props_getter_holding_object_ref_count(self):
+        holder = GIMarshallingTests.PropertiesObject()
+        held = GObject.Object()
 
-        self.assertRaises(TypeError, obj.set_bare, object())
-        self.assertRaises(TypeError, obj.set_bare, 42)
-        self.assertRaises(TypeError, obj.set_bare, 'not an object')
+        self.assertEqual(holder.__grefcount__, 1)
+        self.assertEqual(held.__grefcount__, 1)
 
-    def test_instance_argument_error(self):
-        # ensure TypeError is raised for non Regress.TestObj instances.
-        obj = Regress.TestObj()
-        self.assertEqual(Regress.TestObj.instance_method(obj), -1)
-        self.assertRaises(TypeError, Regress.TestObj.instance_method, object())
-        self.assertRaises(TypeError, Regress.TestObj.instance_method, GObject.Object())
-        self.assertRaises(TypeError, Regress.TestObj.instance_method, 42)
-        self.assertRaises(TypeError, Regress.TestObj.instance_method, 'not an object')
+        holder.set_property('some-object', held)
+        self.assertEqual(holder.__grefcount__, 1)
 
-    def test_instance_argument_base_type_error(self):
-        # ensure TypeError is raised when a base type is passed to something
-        # expecting a derived type
-        obj = Regress.TestSubObj()
-        self.assertEqual(Regress.TestSubObj.instance_method(obj), 0)
-        self.assertRaises(TypeError, Regress.TestSubObj.instance_method, GObject.Object())
-        self.assertRaises(TypeError, Regress.TestSubObj.instance_method, Regress.TestObj())
+        initial_ref_count = held.__grefcount__
+        holder.props.some_object
+        gc.collect()
+        self.assertEqual(held.__grefcount__, initial_ref_count)
+
+    def test_get_property_holding_object_ref_count(self):
+        holder = GIMarshallingTests.PropertiesObject()
+        held = GObject.Object()
+
+        self.assertEqual(holder.__grefcount__, 1)
+        self.assertEqual(held.__grefcount__, 1)
+
+        holder.set_property('some-object', held)
+        self.assertEqual(holder.__grefcount__, 1)
+
+        initial_ref_count = held.__grefcount__
+        holder.get_property('some-object')
+        gc.collect()
+        self.assertEqual(held.__grefcount__, initial_ref_count)
+
+    def test_props_setter_holding_object_ref_count(self):
+        holder = GIMarshallingTests.PropertiesObject()
+        held = GObject.Object()
+
+        self.assertEqual(holder.__grefcount__, 1)
+        self.assertEqual(held.__grefcount__, 1)
+
+        # Setting property should only increase ref count by 1
+        holder.props.some_object = held
+        self.assertEqual(holder.__grefcount__, 1)
+        self.assertEqual(held.__grefcount__, 2)
+
+        # Clearing should pull it back down
+        holder.props.some_object = None
+        self.assertEqual(held.__grefcount__, 1)
+
+    def test_set_property_holding_object_ref_count(self):
+        holder = GIMarshallingTests.PropertiesObject()
+        held = GObject.Object()
+
+        self.assertEqual(holder.__grefcount__, 1)
+        self.assertEqual(held.__grefcount__, 1)
+
+        # Setting property should only increase ref count by 1
+        holder.set_property('some-object', held)
+        self.assertEqual(holder.__grefcount__, 1)
+        self.assertEqual(held.__grefcount__, 2)
+
+        # Clearing should pull it back down
+        holder.set_property('some-object', None)
+        self.assertEqual(held.__grefcount__, 1)
+
+    def test_set_object_property_to_invalid_type(self):
+        obj = GIMarshallingTests.PropertiesObject()
+        self.assertRaises(TypeError, obj.set_property, 'some-object', 'not_an_object')

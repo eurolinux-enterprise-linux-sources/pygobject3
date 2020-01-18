@@ -22,65 +22,33 @@
 import signal
 import warnings
 import sys
-import socket
 
 from ..module import get_introspection_module
-from .._gi import (variant_type_from_string, source_new,
+from .._gi import (variant_new_tuple, variant_type_from_string, source_new,
                    source_set_callback, io_channel_read)
-from ..overrides import override, deprecated, deprecated_attr
+from ..overrides import override, deprecated
 from gi import PyGIDeprecationWarning, version_info
 
 GLib = get_introspection_module('GLib')
 
 __all__ = []
 
-from gi import _option as option
+from gi._glib import option
 option  # pyflakes
 __all__.append('option')
 
 
 # Types and functions still needed from static bindings
-from gi._gi import _glib
-from gi._gi import _gobject
-from gi._error import GError
-
-Error = GError
+from gi._glib import _glib
+GError = _glib.GError
 OptionContext = _glib.OptionContext
 OptionGroup = _glib.OptionGroup
 Pid = _glib.Pid
+PollFD = _glib.PollFD
 spawn_async = _glib.spawn_async
+threads_init = _glib.threads_init
 
-
-def threads_init():
-    warnings.warn('Since version 3.11, calling threads_init is no longer needed. '
-                  'See: https://wiki.gnome.org/PyGObject/Threading',
-                  PyGIDeprecationWarning, stacklevel=2)
-
-
-def gerror_matches(self, domain, code):
-    # Handle cases where self.domain was set to an integer for compatibility
-    # with the introspected GLib.Error.
-    if isinstance(self.domain, str):
-        self_domain_quark = GLib.quark_from_string(self.domain)
-    else:
-        self_domain_quark = self.domain
-    return (self_domain_quark, self.code) == (domain, code)
-
-
-def gerror_new_literal(domain, message, code):
-    domain_quark = GLib.quark_to_string(domain)
-    return GError(message, domain_quark, code)
-
-
-# Monkey patch methods that rely on GLib introspection to be loaded at runtime.
-Error.__name__ = 'Error'
-Error.__module__ = 'GLib'
-Error.__gtype__ = GLib.Error.__gtype__
-Error.matches = gerror_matches
-Error.new_literal = staticmethod(gerror_new_literal)
-
-
-__all__ += ['GError', 'Error', 'OptionContext', 'OptionGroup', 'Pid',
+__all__ += ['GError', 'OptionContext', 'OptionGroup', 'Pid', 'PollFD',
             'spawn_async', 'threads_init']
 
 
@@ -104,7 +72,7 @@ class _VariantCreator(object):
     }
 
     def _create(self, format, args):
-        """Create a GVariant object from given format and argument list.
+        '''Create a GVariant object from given format and argument list.
 
         This method recursively calls itself for complex structures (arrays,
         dictionaries, boxed).
@@ -116,7 +84,7 @@ class _VariantCreator(object):
         If args is None, then this won't actually consume any arguments, and
         just parse the format string and generate empty GVariant structures.
         This is required for creating empty dictionaries or arrays.
-        """
+        '''
         # leaves (simple types)
         constructor = self._LEAF_CONSTRUCTORS.get(format[0])
         if constructor:
@@ -140,7 +108,7 @@ class _VariantCreator(object):
         raise NotImplementedError('cannot handle GVariant type ' + format)
 
     def _create_tuple(self, format, args):
-        """Handle the case where the outermost type of format is a tuple."""
+        '''Handle the case where the outermost type of format is a tuple.'''
 
         format = format[1:]  # eat the '('
         if args is None:
@@ -174,7 +142,7 @@ class _VariantCreator(object):
             return (builder.end(), rest_format, args)
 
     def _create_dict(self, format, args):
-        """Handle the case where the outermost type of format is a dict."""
+        '''Handle the case where the outermost type of format is a dict.'''
 
         builder = None
         if args is None or not args[0]:
@@ -207,7 +175,7 @@ class _VariantCreator(object):
         return (builder.end(), rest_format, args)
 
     def _create_array(self, format, args):
-        """Handle the case where the outermost type of format is an array."""
+        '''Handle the case where the outermost type of format is an array.'''
 
         builder = None
         if args is None or not args[0]:
@@ -228,7 +196,7 @@ class _VariantCreator(object):
 
 class Variant(GLib.Variant):
     def __new__(cls, format_string, value):
-        """Create a GVariant from a native Python object.
+        '''Create a GVariant from a native Python object.
 
         format_string is a standard GVariant type signature, value is a Python
         object whose structure has to match the signature.
@@ -238,17 +206,13 @@ class Variant(GLib.Variant):
           GLib.Variant('(is)', (1, 'hello'))
           GLib.Variant('(asa{sv})', ([], {'foo': GLib.Variant('b', True),
                                           'bar': GLib.Variant('i', 2)}))
-        """
+        '''
         creator = _VariantCreator()
         (v, rest_format, _) = creator._create(format_string, [value])
         if rest_format:
             raise TypeError('invalid remaining format string: "%s"' % rest_format)
         v.format_string = format_string
         return v
-
-    @staticmethod
-    def new_tuple(*elements):
-        return GLib.Variant.new_tuple(elements)
 
     def __del__(self):
         self.unref()
@@ -282,7 +246,7 @@ class Variant(GLib.Variant):
         return hash((self.get_type_string(), self.unpack()))
 
     def unpack(self):
-        """Decompose a GVariant into a native Python object."""
+        '''Decompose a GVariant into a native Python object.'''
 
         LEAF_ACCESSORS = {
             'b': self.get_boolean,
@@ -337,14 +301,14 @@ class Variant(GLib.Variant):
 
     @classmethod
     def split_signature(klass, signature):
-        """Return a list of the element signatures of the topmost signature tuple.
+        '''Return a list of the element signatures of the topmost signature tuple.
 
         If the signature is not a tuple, it returns one element with the entire
         signature. If the signature is an empty tuple, the result is [].
 
         This is useful for e. g. iterating over method parameters which are
         passed as a single Variant.
-        """
+        '''
         if signature == '()':
             return []
 
@@ -464,10 +428,16 @@ class Variant(GLib.Variant):
         return res
 
 
+@classmethod
+def new_tuple(cls, *elements):
+    return variant_new_tuple(elements)
+
+
 def get_string(self):
     value, length = GLib.Variant.get_string(self)
     return value
 
+setattr(Variant, 'new_tuple', new_tuple)
 setattr(Variant, 'get_string', get_string)
 
 __all__.append('Variant')
@@ -484,10 +454,8 @@ __all__.append('markup_escape_text')
 # backwards compatible names from old static bindings
 for n in ['DESKTOP', 'DOCUMENTS', 'DOWNLOAD', 'MUSIC', 'PICTURES',
           'PUBLIC_SHARE', 'TEMPLATES', 'VIDEOS']:
-    attr = 'USER_DIRECTORY_' + n
-    deprecated_attr("GLib", attr, "GLib.UserDirectory.DIRECTORY_" + n)
-    globals()[attr] = getattr(GLib.UserDirectory, 'DIRECTORY_' + n)
-    __all__.append(attr)
+    globals()['USER_DIRECTORY_' + n] = getattr(GLib.UserDirectory, 'DIRECTORY_' + n)
+    __all__.append('USER_DIRECTORY_' + n)
 
 for n in ['ERR', 'HUP', 'IN', 'NVAL', 'OUT', 'PRI']:
     globals()['IO_' + n] = getattr(GLib.IOCondition, n)
@@ -495,53 +463,30 @@ for n in ['ERR', 'HUP', 'IN', 'NVAL', 'OUT', 'PRI']:
 
 for n in ['APPEND', 'GET_MASK', 'IS_READABLE', 'IS_SEEKABLE',
           'MASK', 'NONBLOCK', 'SET_MASK']:
-    attr = 'IO_FLAG_' + n
-    deprecated_attr("GLib", attr, "GLib.IOFlags." + n)
-    globals()[attr] = getattr(GLib.IOFlags, n)
-    __all__.append(attr)
-
+    globals()['IO_FLAG_' + n] = getattr(GLib.IOFlags, n)
+    __all__.append('IO_FLAG_' + n)
 # spelling for the win
 IO_FLAG_IS_WRITEABLE = GLib.IOFlags.IS_WRITABLE
-deprecated_attr("GLib", "IO_FLAG_IS_WRITEABLE", "GLib.IOFlags.IS_WRITABLE")
 __all__.append('IO_FLAG_IS_WRITEABLE')
 
 for n in ['AGAIN', 'EOF', 'ERROR', 'NORMAL']:
-    attr = 'IO_STATUS_' + n
-    globals()[attr] = getattr(GLib.IOStatus, n)
-    deprecated_attr("GLib", attr, "GLib.IOStatus." + n)
-    __all__.append(attr)
+    globals()['IO_STATUS_' + n] = getattr(GLib.IOStatus, n)
+    __all__.append('IO_STATUS_' + n)
 
 for n in ['CHILD_INHERITS_STDIN', 'DO_NOT_REAP_CHILD', 'FILE_AND_ARGV_ZERO',
           'LEAVE_DESCRIPTORS_OPEN', 'SEARCH_PATH', 'STDERR_TO_DEV_NULL',
           'STDOUT_TO_DEV_NULL']:
-    attr = 'SPAWN_' + n
-    globals()[attr] = getattr(GLib.SpawnFlags, n)
-    deprecated_attr("GLib", attr, "GLib.SpawnFlags." + n)
-    __all__.append(attr)
+    globals()['SPAWN_' + n] = getattr(GLib.SpawnFlags, n)
+    __all__.append('SPAWN_' + n)
 
 for n in ['HIDDEN', 'IN_MAIN', 'REVERSE', 'NO_ARG', 'FILENAME', 'OPTIONAL_ARG',
           'NOALIAS']:
-    attr = 'OPTION_FLAG_' + n
-    globals()[attr] = getattr(GLib.OptionFlags, n)
-    deprecated_attr("GLib", attr, "GLib.OptionFlags." + n)
-    __all__.append(attr)
+    globals()['OPTION_FLAG_' + n] = getattr(GLib.OptionFlags, n)
+    __all__.append('OPTION_FLAG_' + n)
 
 for n in ['UNKNOWN_OPTION', 'BAD_VALUE', 'FAILED']:
-    attr = 'OPTION_ERROR_' + n
-    deprecated_attr("GLib", attr, "GLib.OptionError." + n)
-    globals()[attr] = getattr(GLib.OptionError, n)
-    __all__.append(attr)
-
-
-# these are not currently exported in GLib gir, presumably because they are
-# platform dependent; so get them from our static bindings
-for name in ['G_MINFLOAT', 'G_MAXFLOAT', 'G_MINDOUBLE', 'G_MAXDOUBLE',
-             'G_MINSHORT', 'G_MAXSHORT', 'G_MAXUSHORT', 'G_MININT', 'G_MAXINT',
-             'G_MAXUINT', 'G_MINLONG', 'G_MAXLONG', 'G_MAXULONG', 'G_MAXSIZE',
-             'G_MINSSIZE', 'G_MAXSSIZE', 'G_MINOFFSET', 'G_MAXOFFSET']:
-    attr = name.split("_", 1)[-1]
-    globals()[attr] = getattr(_gobject, name)
-    __all__.append(attr)
+    globals()['OPTION_ERROR_' + n] = getattr(GLib.OptionError, n)
+    __all__.append('OPTION_ERROR_' + n)
 
 
 class MainLoop(GLib.MainLoop):
@@ -554,10 +499,6 @@ class MainLoop(GLib.MainLoop):
         def _handler(loop):
             loop.quit()
             loop._quit_by_sigint = True
-            # We handle signal deletion in __del__, return True so GLib
-            # doesn't do the deletion for us.
-            return True
-
         if sys.platform != 'win32':
             # compatibility shim, keep around until we depend on glib 2.36
             if hasattr(GLib, 'unix_signal_add'):
@@ -590,7 +531,7 @@ __all__.append('MainContext')
 
 
 class Source(GLib.Source):
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls):
         # use our custom pyg_source_new() here as g_source_new() is not
         # bindable
         source = source_new()
@@ -598,8 +539,14 @@ class Source(GLib.Source):
         setattr(source, '__pygi_custom_source', True)
         return source
 
-    def __init__(self, *args, **kwargs):
-        return super(Source, self).__init__()
+    def __del__(self):
+        if hasattr(self, '__pygi_custom_source'):
+            self.unref()
+
+    # Backwards compatible API for optional arguments
+    def attach(self, context=None):
+        id = super(Source, self).attach(context)
+        return id
 
     def set_callback(self, fn, user_data=None):
         if hasattr(self, '__pygi_custom_source'):
@@ -665,41 +612,60 @@ class Timeout(Source):
 __all__.append('Timeout')
 
 
+def user_data_varargs_shim(callback, user_data, cb_num_args=0):
+    '''Adjust callback and user_data varargs for PyGTK backwards compatibility
+
+    GLib only accepts exactly one user_data argument, but older pygtk
+    traditionally accepted zero or more for some specific functions. For "one
+    argument", use the actual user-supplied callback for efficiency; for all
+    others, rewire it to accept zero or more than one.
+
+    Return the adjusted callback and the real user data to pass to GLib.
+    '''
+    if len(user_data) == 1:
+        return (callback, user_data[0])
+
+    if cb_num_args == 0:
+        return (lambda data: callback(*data), user_data)
+    if cb_num_args == 2:
+        return (lambda a1, a2, data: callback(a1, a2, *data), user_data)
+    raise NotImplementedError('%i number of callback arguments not supported' % cb_num_args)
+
+
 # backwards compatible API
 def idle_add(function, *user_data, **kwargs):
+    (fn, data) = user_data_varargs_shim(function, user_data)
     priority = kwargs.get('priority', GLib.PRIORITY_DEFAULT_IDLE)
-    return GLib.idle_add(priority, function, *user_data)
+    return GLib.idle_add(priority, fn, data)
 
 __all__.append('idle_add')
 
 
 def timeout_add(interval, function, *user_data, **kwargs):
+    (fn, data) = user_data_varargs_shim(function, user_data)
     priority = kwargs.get('priority', GLib.PRIORITY_DEFAULT)
-    return GLib.timeout_add(priority, interval, function, *user_data)
+    return GLib.timeout_add(priority, interval, fn, data)
 
 __all__.append('timeout_add')
 
 
 def timeout_add_seconds(interval, function, *user_data, **kwargs):
+    (fn, data) = user_data_varargs_shim(function, user_data)
     priority = kwargs.get('priority', GLib.PRIORITY_DEFAULT)
-    return GLib.timeout_add_seconds(priority, interval, function, *user_data)
+    return GLib.timeout_add_seconds(priority, interval, fn, data)
 
 __all__.append('timeout_add_seconds')
 
 
-# The GI GLib API uses g_io_add_watch_full renamed to g_io_add_watch with
-# a signature of (channel, priority, condition, func, user_data).
-# Prior to PyGObject 3.8, this function was statically bound with an API closer to the
-# non-full version with a signature of: (fd, condition, func, *user_data)
-# We need to support this until we are okay with breaking API in a way which is
-# not backwards compatible.
-#
-# This needs to take into account several historical APIs:
+# The real GLib API is io_add_watch(IOChannel, priority, condition, callback,
+# user_data). This needs to take into account several historical APIs:
 # - calling with an fd as first argument
 # - calling with a Python file object as first argument (we keep this one as
 #   it's really convenient and does not change the number of arguments)
 # - calling without a priority as second argument
-def _io_add_watch_get_args(channel, priority_, condition, *cb_and_user_data, **kwargs):
+# and the usual "call without or multiple user_data", in which case the
+# callback gets the same user data arguments.
+def io_add_watch(channel, priority_, condition, *cb_and_user_data, **kwargs):
     if not isinstance(priority_, int) or isinstance(priority_, GLib.IOCondition):
         warnings.warn('Calling io_add_watch without priority as second argument is deprecated',
                       PyGIDeprecationWarning)
@@ -723,31 +689,23 @@ def _io_add_watch_get_args(channel, priority_, condition, *cb_and_user_data, **k
         callback = cb_and_user_data[0]
         user_data = cb_and_user_data[1:]
 
+    (func, user_data) = user_data_varargs_shim(callback, user_data, 2)
+
     # backwards compatibility: Allow calling with fd
     if isinstance(channel, int):
-        func_fdtransform = lambda _, cond, *data: callback(channel, cond, *data)
+        func_fdtransform = lambda _, cond, data: func(channel, cond, data)
         real_channel = GLib.IOChannel.unix_new(channel)
-    elif isinstance(channel, socket.socket) and sys.platform == 'win32':
-        func_fdtransform = lambda _, cond, *data: callback(channel, cond, *data)
-        real_channel = GLib.IOChannel.win32_new_socket(channel.fileno())
     elif hasattr(channel, 'fileno'):
         # backwards compatibility: Allow calling with Python file
-        func_fdtransform = lambda _, cond, *data: callback(channel, cond, *data)
+        func_fdtransform = lambda _, cond, data: func(channel, cond, data)
         real_channel = GLib.IOChannel.unix_new(channel.fileno())
     else:
         assert isinstance(channel, GLib.IOChannel)
-        func_fdtransform = callback
+        func_fdtransform = func
         real_channel = channel
 
-    return real_channel, priority_, condition, func_fdtransform, user_data
-
-__all__.append('_io_add_watch_get_args')
-
-
-def io_add_watch(*args, **kwargs):
-    """io_add_watch(channel, priority, condition, func, *user_data) -> event_source_id"""
-    channel, priority, condition, func, user_data = _io_add_watch_get_args(*args, **kwargs)
-    return GLib.io_add_watch(channel, priority, condition, func, *user_data)
+    return GLib.io_add_watch(real_channel, priority_, condition,
+                             func_fdtransform, user_data)
 
 __all__.append('io_add_watch')
 
@@ -762,9 +720,6 @@ class IOChannel(GLib.IOChannel):
         if hwnd is not None:
             return GLib.IOChannel.win32_new_fd(hwnd)
         raise TypeError('either a valid file descriptor, file name, or window handle must be supplied')
-
-    def __init__(self, *args, **kwargs):
-        return super(IOChannel, self).__init__()
 
     def read(self, max_count=-1):
         return io_channel_read(self, max_count)
@@ -834,28 +789,14 @@ IOChannel = override(IOChannel)
 __all__.append('IOChannel')
 
 
-class PollFD(GLib.PollFD):
-    def __new__(cls, fd, events):
-        pollfd = GLib.PollFD()
-        pollfd.__class__ = cls
-        return pollfd
-
-    def __init__(self, fd, events):
-        self.fd = fd
-        self.events = events
-
-PollFD = override(PollFD)
-__all__.append('PollFD')
-
-
-# The GI GLib API uses g_child_watch_add_full renamed to g_child_watch_add with
-# a signature of (priority, pid, callback, data).
-# Prior to PyGObject 3.8, this function was statically bound with an API closer to the
-# non-full version with a signature of: (pid, callback, data=None, priority=GLib.PRIORITY_DEFAULT)
-# We need to support this until we are okay with breaking API in a way which is
-# not backwards compatible.
-def _child_watch_add_get_args(priority_or_pid, pid_or_callback, *args, **kwargs):
-    user_data = []
+# The real GLib API is child_watch_add(priority, pid, callback, data).
+# The old static bindings had the following API which we still need to support
+# for a while:
+#   child_watch_add(pid, callback, data=None, priority=GLib.PRIORITY_DEFAULT)
+# and the usual "call without user_data", in which case the callback does not
+# get an user_data either.
+def child_watch_add(priority_or_pid, pid_or_callback, *args, **kwargs):
+    _unspecified = object()
 
     if callable(pid_or_callback):
         warnings.warn('Calling child_watch_add without priority as first argument is deprecated',
@@ -863,42 +804,35 @@ def _child_watch_add_get_args(priority_or_pid, pid_or_callback, *args, **kwargs)
         pid = priority_or_pid
         callback = pid_or_callback
         if len(args) == 0:
+            user_data = kwargs.get('data', _unspecified)
             priority = kwargs.get('priority', GLib.PRIORITY_DEFAULT)
         elif len(args) == 1:
-            user_data = args
+            user_data = args[0]
             priority = kwargs.get('priority', GLib.PRIORITY_DEFAULT)
         elif len(args) == 2:
-            user_data = [args[0]]
+            user_data = args[0]
             priority = args[1]
         else:
             raise TypeError('expected at most 4 positional arguments')
     else:
         priority = priority_or_pid
         pid = pid_or_callback
-        if 'function' in kwargs:
-            callback = kwargs['function']
-            user_data = args
-        elif len(args) > 0 and callable(args[0]):
-            callback = args[0]
-            user_data = args[1:]
-        else:
+        if len(args) == 0 or not callable(args[0]):
             raise TypeError('expected callback as third argument')
+        callback = args[0]
+        if len(args) == 1:
+            user_data = kwargs.get('data', _unspecified)
+        else:
+            user_data = args[1]
 
-    if 'data' in kwargs:
-        if user_data:
-            raise TypeError('got multiple values for "data" argument')
-        user_data = [kwargs['data']]
+    if user_data is _unspecified:
+        # we have to call the callback without the user_data argument
+        func = lambda pid, status, data: callback(pid, status)
+        user_data = None
+    else:
+        func = callback
 
-    return priority, pid, callback, user_data
-
-# we need this to be accessible for unit testing
-__all__.append('_child_watch_add_get_args')
-
-
-def child_watch_add(*args, **kwargs):
-    """child_watch_add(priority, pid, function, *data)"""
-    priority, pid, function, data = _child_watch_add_get_args(*args, **kwargs)
-    return GLib.child_watch_add(priority, pid, function, *data)
+    return GLib.child_watch_add(priority, pid, func, user_data)
 
 __all__.append('child_watch_add')
 
@@ -932,9 +866,5 @@ if not hasattr(GLib, 'unix_signal_add_full'):
 # obsolete constants for backwards compatibility
 glib_version = (GLib.MAJOR_VERSION, GLib.MINOR_VERSION, GLib.MICRO_VERSION)
 __all__.append('glib_version')
-deprecated_attr("GLib", "glib_version",
-                "(GLib.MAJOR_VERSION, GLib.MINOR_VERSION, GLib.MICRO_VERSION)")
-
 pyglib_version = version_info
 __all__.append('pyglib_version')
-deprecated_attr("GLib", "pyglib_version", "gi.version_info")

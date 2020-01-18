@@ -8,9 +8,7 @@ import warnings
 from gi.repository import GObject, GLib
 from gi import PyGIDeprecationWarning
 from gi.module import get_introspection_module
-
-import gi
-_gobject = gi._gi._gobject
+from gi._gobject import _gobject
 
 import testhelper
 
@@ -30,6 +28,7 @@ class TestGObjectAPI(unittest.TestCase):
         # The pytype wrapper should hold the outer most Object class from overrides.
         self.assertEqual(GObject.TYPE_OBJECT.pytype, GObject.Object)
 
+    @unittest.skipIf(sys.version_info[:2] < (2, 7), 'Python 2.7 is required')
     def test_gobject_unsupported_overrides(self):
         obj = GObject.Object()
 
@@ -60,20 +59,17 @@ class TestGObjectAPI(unittest.TestCase):
             self.assertLess(GObject.PRIORITY_HIGH, GObject.PRIORITY_DEFAULT)
 
     def test_min_max_int(self):
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore', PyGIDeprecationWarning)
+        self.assertEqual(GObject.G_MAXINT16, 2 ** 15 - 1)
+        self.assertEqual(GObject.G_MININT16, -2 ** 15)
+        self.assertEqual(GObject.G_MAXUINT16, 2 ** 16 - 1)
 
-            self.assertEqual(GObject.G_MAXINT16, 2 ** 15 - 1)
-            self.assertEqual(GObject.G_MININT16, -2 ** 15)
-            self.assertEqual(GObject.G_MAXUINT16, 2 ** 16 - 1)
+        self.assertEqual(GObject.G_MAXINT32, 2 ** 31 - 1)
+        self.assertEqual(GObject.G_MININT32, -2 ** 31)
+        self.assertEqual(GObject.G_MAXUINT32, 2 ** 32 - 1)
 
-            self.assertEqual(GObject.G_MAXINT32, 2 ** 31 - 1)
-            self.assertEqual(GObject.G_MININT32, -2 ** 31)
-            self.assertEqual(GObject.G_MAXUINT32, 2 ** 32 - 1)
-
-            self.assertEqual(GObject.G_MAXINT64, 2 ** 63 - 1)
-            self.assertEqual(GObject.G_MININT64, -2 ** 63)
-            self.assertEqual(GObject.G_MAXUINT64, 2 ** 64 - 1)
+        self.assertEqual(GObject.G_MAXINT64, 2 ** 63 - 1)
+        self.assertEqual(GObject.G_MININT64, -2 ** 63)
+        self.assertEqual(GObject.G_MAXUINT64, 2 ** 64 - 1)
 
 
 class TestReferenceCounting(unittest.TestCase):
@@ -420,8 +416,6 @@ class TestContextManagers(unittest.TestCase):
         self.assertEqual(self.tracking, [2])
 
 
-@unittest.skipUnless(hasattr(GObject.Binding, 'unbind'),
-                     'Requires newer GLib which has g_binding_unbind')
 class TestPropertyBindings(unittest.TestCase):
     class TestObject(GObject.GObject):
         int_prop = GObject.Property(default=0, type=int)
@@ -516,8 +510,8 @@ class TestPropertyBindings(unittest.TestCase):
                                             GObject.BindingFlags.BIDIRECTIONAL,
                                             transform_to, transform_from, test_data)
         binding = binding  # PyFlakes
-        binding_ref_count = sys.getrefcount(binding)
-        binding_gref_count = binding.__grefcount__
+        binding_ref_count = sys.getrefcount(binding())
+        binding_gref_count = binding().__grefcount__
 
         self.source.int_prop = 1
         self.assertEqual(self.source.int_prop, 1)
@@ -527,8 +521,8 @@ class TestPropertyBindings(unittest.TestCase):
         self.assertEqual(self.source.int_prop, 2)
         self.assertEqual(self.target.int_prop, 4)
 
-        self.assertEqual(sys.getrefcount(binding), binding_ref_count)
-        self.assertEqual(binding.__grefcount__, binding_gref_count)
+        self.assertEqual(sys.getrefcount(binding()), binding_ref_count)
+        self.assertEqual(binding().__grefcount__, binding_gref_count)
 
         # test_data ref count increases by 2, once for each callback.
         self.assertEqual(sys.getrefcount(test_data), test_data_ref_count + 2)
@@ -537,6 +531,9 @@ class TestPropertyBindings(unittest.TestCase):
 
         # Unbind should clear out the binding and its transforms
         binding.unbind()
+        self.assertEqual(binding(), None)
+        del binding
+        gc.collect()
 
         # Setting source or target should not change the other.
         self.target.int_prop = 3
@@ -558,9 +555,8 @@ class TestPropertyBindings(unittest.TestCase):
         self.assertEqual(self.source.int_prop, 1)
         self.assertEqual(self.target.int_prop, 1)
 
-        # unbind should clear out the bindings self reference
         binding.unbind()
-        self.assertEqual(binding.__grefcount__, 1)
+        self.assertEqual(binding(), None)
 
         self.source.int_prop = 10
         self.assertEqual(self.source.int_prop, 10)
@@ -577,7 +573,7 @@ class TestPropertyBindings(unittest.TestCase):
         # the act of binding and the ref incurred by using __call__ to generate
         # a wrapper from the weak binding ref within python.
         binding = self.source.bind_property('int_prop', self.target, 'int_prop')
-        self.assertEqual(binding.__grefcount__, 2)
+        self.assertEqual(binding().__grefcount__, 2)
 
         # Creating a binding does not inc refs on source and target (they are weak
         # on the binding object itself)
@@ -586,25 +582,18 @@ class TestPropertyBindings(unittest.TestCase):
 
         # Use GObject.get_property because the "props" accessor leaks.
         # Note property names are canonicalized.
-        self.assertEqual(binding.get_property('source'), self.source)
-        self.assertEqual(binding.get_property('source_property'), 'int-prop')
-        self.assertEqual(binding.get_property('target'), self.target)
-        self.assertEqual(binding.get_property('target_property'), 'int-prop')
-        self.assertEqual(binding.get_property('flags'), GObject.BindingFlags.DEFAULT)
+        self.assertEqual(binding().get_property('source'), self.source)
+        self.assertEqual(binding().get_property('source_property'), 'int-prop')
+        self.assertEqual(binding().get_property('target'), self.target)
+        self.assertEqual(binding().get_property('target_property'), 'int-prop')
+        self.assertEqual(binding().get_property('flags'), GObject.BindingFlags.DEFAULT)
 
-        # Delete reference to source or target and the binding will remove its own
-        # "self reference".
+        # Delete reference to source or target and the binding should listen.
         ref = self.source.weak_ref()
         del self.source
         gc.collect()
         self.assertEqual(ref(), None)
-        self.assertEqual(binding.__grefcount__, 1)
-
-        # Finally clear out the last ref held by the python wrapper
-        ref = binding.weak_ref()
-        del binding
-        gc.collect()
-        self.assertEqual(ref(), None)
+        self.assertEqual(binding(), None)
 
 
 class TestGValue(unittest.TestCase):
@@ -641,7 +630,7 @@ class TestGValue(unittest.TestCase):
         value = GObject.Value(GObject.TYPE_FLOAT, 23.4)
         self.assertEqual(value.g_type, GObject.TYPE_FLOAT)
         self.assertRaises(TypeError, value.set_value, 'string')
-        self.assertRaises(OverflowError, value.set_value, 1e50)
+        self.assertRaises(ValueError, value.set_value, 1e50)
 
     def test_float_inf_nan(self):
         nan = float('nan')
@@ -668,29 +657,6 @@ class TestGValue(unittest.TestCase):
         obj = TestObject()
         value = GObject.Value(GObject.TYPE_OBJECT, obj)
         self.assertEqual(value.get_value(), obj)
-
-    def test_value_array(self):
-        value = GObject.Value(GObject.ValueArray)
-        self.assertEqual(value.g_type, GObject.type_from_name('GValueArray'))
-        value.set_value([32, 'foo_bar', 0.3])
-        self.assertEqual(value.get_value(), [32, 'foo_bar', 0.3])
-
-    def test_gerror_boxing(self):
-        error = GLib.Error('test message', domain='mydomain', code=42)
-        value = GObject.Value(GLib.Error, error)
-        self.assertEqual(value.g_type, GObject.type_from_name('GError'))
-
-        unboxed = value.get_value()
-        self.assertEqual(unboxed.message, error.message)
-        self.assertEqual(unboxed.domain, error.domain)
-        self.assertEqual(unboxed.code, error.code)
-
-    def test_gerror_novalue(self):
-        GLib.Error('test message', domain='mydomain', code=42)
-        value = GObject.Value(GLib.Error)
-        self.assertEqual(value.g_type, GObject.type_from_name('GError'))
-        self.assertEqual(value.get_value(), None)
-
 
 if __name__ == '__main__':
     unittest.main()

@@ -16,15 +16,11 @@ import warnings
 from io import StringIO, BytesIO
 
 import gi
-import gi.overrides
-from gi import PyGIWarning
-from gi import PyGIDeprecationWarning
 from gi.repository import GObject, GLib, Gio
 
 from gi.repository import GIMarshallingTests
 
 from compathelper import _bytes, _unicode
-from helper import capture_exceptions
 
 if sys.version_info < (3, 0):
     CONSTANT_UTF8 = "const \xe2\x99\xa5 utf8"
@@ -63,8 +59,9 @@ class Sequence(object):
 
 class TestConstant(unittest.TestCase):
 
-    def test_constant_utf8(self):
-        self.assertEqual(CONSTANT_UTF8, GIMarshallingTests.CONSTANT_UTF8)
+# Blocked by https://bugzilla.gnome.org/show_bug.cgi?id=595773
+#    def test_constant_utf8(self):
+#        self.assertEqual(CONSTANT_UTF8, GIMarshallingTests.CONSTANT_UTF8)
 
     def test_constant_number(self):
         self.assertEqual(CONSTANT_NUMBER, GIMarshallingTests.CONSTANT_NUMBER)
@@ -103,8 +100,8 @@ class TestBoolean(unittest.TestCase):
 
 class TestInt8(unittest.TestCase):
 
-    MAX = GLib.MAXINT8
-    MIN = GLib.MININT8
+    MAX = GObject.G_MAXINT8
+    MIN = GObject.G_MININT8
 
     def test_int8_return(self):
         self.assertEqual(self.MAX, GIMarshallingTests.int8_return_max())
@@ -120,8 +117,8 @@ class TestInt8(unittest.TestCase):
         max.value += 1
         min.value -= 1
 
-        self.assertRaises(OverflowError, GIMarshallingTests.int8_in_max, max)
-        self.assertRaises(OverflowError, GIMarshallingTests.int8_in_min, min)
+        self.assertRaises(ValueError, GIMarshallingTests.int8_in_max, max)
+        self.assertRaises(ValueError, GIMarshallingTests.int8_in_min, min)
 
         self.assertRaises(TypeError, GIMarshallingTests.int8_in_max, "self.MAX")
 
@@ -136,7 +133,7 @@ class TestInt8(unittest.TestCase):
 
 class TestUInt8(unittest.TestCase):
 
-    MAX = GLib.MAXUINT8
+    MAX = GObject.G_MAXUINT8
 
     def test_uint8_return(self):
         self.assertEqual(self.MAX, GIMarshallingTests.uint8_return())
@@ -148,8 +145,8 @@ class TestUInt8(unittest.TestCase):
         GIMarshallingTests.uint8_in(CHAR_255)
 
         number.value += 1
-        self.assertRaises(OverflowError, GIMarshallingTests.uint8_in, number)
-        self.assertRaises(OverflowError, GIMarshallingTests.uint8_in, Number(-1))
+        self.assertRaises(ValueError, GIMarshallingTests.uint8_in, number)
+        self.assertRaises(ValueError, GIMarshallingTests.uint8_in, Number(-1))
 
         self.assertRaises(TypeError, GIMarshallingTests.uint8_in, "self.MAX")
 
@@ -162,8 +159,8 @@ class TestUInt8(unittest.TestCase):
 
 class TestInt16(unittest.TestCase):
 
-    MAX = GLib.MAXINT16
-    MIN = GLib.MININT16
+    MAX = GObject.G_MAXINT16
+    MIN = GObject.G_MININT16
 
     def test_int16_return(self):
         self.assertEqual(self.MAX, GIMarshallingTests.int16_return_max())
@@ -179,8 +176,8 @@ class TestInt16(unittest.TestCase):
         max.value += 1
         min.value -= 1
 
-        self.assertRaises(OverflowError, GIMarshallingTests.int16_in_max, max)
-        self.assertRaises(OverflowError, GIMarshallingTests.int16_in_min, min)
+        self.assertRaises(ValueError, GIMarshallingTests.int16_in_max, max)
+        self.assertRaises(ValueError, GIMarshallingTests.int16_in_min, min)
 
         self.assertRaises(TypeError, GIMarshallingTests.int16_in_max, "self.MAX")
 
@@ -195,7 +192,7 @@ class TestInt16(unittest.TestCase):
 
 class TestUInt16(unittest.TestCase):
 
-    MAX = GLib.MAXUINT16
+    MAX = GObject.G_MAXUINT16
 
     def test_uint16_return(self):
         self.assertEqual(self.MAX, GIMarshallingTests.uint16_return())
@@ -207,8 +204,8 @@ class TestUInt16(unittest.TestCase):
 
         number.value += 1
 
-        self.assertRaises(OverflowError, GIMarshallingTests.uint16_in, number)
-        self.assertRaises(OverflowError, GIMarshallingTests.uint16_in, Number(-1))
+        self.assertRaises(ValueError, GIMarshallingTests.uint16_in, number)
+        self.assertRaises(ValueError, GIMarshallingTests.uint16_in, Number(-1))
 
         self.assertRaises(TypeError, GIMarshallingTests.uint16_in, "self.MAX")
 
@@ -221,8 +218,8 @@ class TestUInt16(unittest.TestCase):
 
 class TestInt32(unittest.TestCase):
 
-    MAX = GLib.MAXINT32
-    MIN = GLib.MININT32
+    MAX = GObject.G_MAXINT32
+    MIN = GObject.G_MININT32
 
     def test_int32_return(self):
         self.assertEqual(self.MAX, GIMarshallingTests.int32_return_max())
@@ -238,8 +235,8 @@ class TestInt32(unittest.TestCase):
         max.value += 1
         min.value -= 1
 
-        self.assertRaises(OverflowError, GIMarshallingTests.int32_in_max, max)
-        self.assertRaises(OverflowError, GIMarshallingTests.int32_in_min, min)
+        self.assertRaises(ValueError, GIMarshallingTests.int32_in_max, max)
+        self.assertRaises(ValueError, GIMarshallingTests.int32_in_min, min)
 
         self.assertRaises(TypeError, GIMarshallingTests.int32_in_max, "self.MAX")
 
@@ -254,7 +251,7 @@ class TestInt32(unittest.TestCase):
 
 class TestUInt32(unittest.TestCase):
 
-    MAX = GLib.MAXUINT32
+    MAX = GObject.G_MAXUINT32
 
     def test_uint32_return(self):
         self.assertEqual(self.MAX, GIMarshallingTests.uint32_return())
@@ -266,8 +263,8 @@ class TestUInt32(unittest.TestCase):
 
         number.value += 1
 
-        self.assertRaises(OverflowError, GIMarshallingTests.uint32_in, number)
-        self.assertRaises(OverflowError, GIMarshallingTests.uint32_in, Number(-1))
+        self.assertRaises(ValueError, GIMarshallingTests.uint32_in, number)
+        self.assertRaises(ValueError, GIMarshallingTests.uint32_in, Number(-1))
 
         self.assertRaises(TypeError, GIMarshallingTests.uint32_in, "self.MAX")
 
@@ -297,8 +294,8 @@ class TestInt64(unittest.TestCase):
         max.value += 1
         min.value -= 1
 
-        self.assertRaises(OverflowError, GIMarshallingTests.int64_in_max, max)
-        self.assertRaises(OverflowError, GIMarshallingTests.int64_in_min, min)
+        self.assertRaises(ValueError, GIMarshallingTests.int64_in_max, max)
+        self.assertRaises(ValueError, GIMarshallingTests.int64_in_min, min)
 
         self.assertRaises(TypeError, GIMarshallingTests.int64_in_max, "self.MAX")
 
@@ -325,8 +322,8 @@ class TestUInt64(unittest.TestCase):
 
         number.value += 1
 
-        self.assertRaises(OverflowError, GIMarshallingTests.uint64_in, number)
-        self.assertRaises(OverflowError, GIMarshallingTests.uint64_in, Number(-1))
+        self.assertRaises(ValueError, GIMarshallingTests.uint64_in, number)
+        self.assertRaises(ValueError, GIMarshallingTests.uint64_in, Number(-1))
 
         self.assertRaises(TypeError, GIMarshallingTests.uint64_in, "self.MAX")
 
@@ -339,8 +336,8 @@ class TestUInt64(unittest.TestCase):
 
 class TestShort(unittest.TestCase):
 
-    MAX = GLib.MAXSHORT
-    MIN = GLib.MINSHORT
+    MAX = GObject.G_MAXSHORT
+    MIN = GObject.G_MINSHORT
 
     def test_short_return(self):
         self.assertEqual(self.MAX, GIMarshallingTests.short_return_max())
@@ -356,8 +353,8 @@ class TestShort(unittest.TestCase):
         max.value += 1
         min.value -= 1
 
-        self.assertRaises(OverflowError, GIMarshallingTests.short_in_max, max)
-        self.assertRaises(OverflowError, GIMarshallingTests.short_in_min, min)
+        self.assertRaises(ValueError, GIMarshallingTests.short_in_max, max)
+        self.assertRaises(ValueError, GIMarshallingTests.short_in_min, min)
 
         self.assertRaises(TypeError, GIMarshallingTests.short_in_max, "self.MAX")
 
@@ -372,7 +369,7 @@ class TestShort(unittest.TestCase):
 
 class TestUShort(unittest.TestCase):
 
-    MAX = GLib.MAXUSHORT
+    MAX = GObject.G_MAXUSHORT
 
     def test_ushort_return(self):
         self.assertEqual(self.MAX, GIMarshallingTests.ushort_return())
@@ -384,8 +381,8 @@ class TestUShort(unittest.TestCase):
 
         number.value += 1
 
-        self.assertRaises(OverflowError, GIMarshallingTests.ushort_in, number)
-        self.assertRaises(OverflowError, GIMarshallingTests.ushort_in, Number(-1))
+        self.assertRaises(ValueError, GIMarshallingTests.ushort_in, number)
+        self.assertRaises(ValueError, GIMarshallingTests.ushort_in, Number(-1))
 
         self.assertRaises(TypeError, GIMarshallingTests.ushort_in, "self.MAX")
 
@@ -398,8 +395,8 @@ class TestUShort(unittest.TestCase):
 
 class TestInt(unittest.TestCase):
 
-    MAX = GLib.MAXINT
-    MIN = GLib.MININT
+    MAX = GObject.G_MAXINT
+    MIN = GObject.G_MININT
 
     def test_int_return(self):
         self.assertEqual(self.MAX, GIMarshallingTests.int_return_max())
@@ -415,8 +412,8 @@ class TestInt(unittest.TestCase):
         max.value += 1
         min.value -= 1
 
-        self.assertRaises(OverflowError, GIMarshallingTests.int_in_max, max)
-        self.assertRaises(OverflowError, GIMarshallingTests.int_in_min, min)
+        self.assertRaises(ValueError, GIMarshallingTests.int_in_max, max)
+        self.assertRaises(ValueError, GIMarshallingTests.int_in_min, min)
 
         self.assertRaises(TypeError, GIMarshallingTests.int_in_max, "self.MAX")
 
@@ -432,7 +429,7 @@ class TestInt(unittest.TestCase):
 
 class TestUInt(unittest.TestCase):
 
-    MAX = GLib.MAXUINT
+    MAX = GObject.G_MAXUINT
 
     def test_uint_return(self):
         self.assertEqual(self.MAX, GIMarshallingTests.uint_return())
@@ -444,8 +441,8 @@ class TestUInt(unittest.TestCase):
 
         number.value += 1
 
-        self.assertRaises(OverflowError, GIMarshallingTests.uint_in, number)
-        self.assertRaises(OverflowError, GIMarshallingTests.uint_in, Number(-1))
+        self.assertRaises(ValueError, GIMarshallingTests.uint_in, number)
+        self.assertRaises(ValueError, GIMarshallingTests.uint_in, Number(-1))
 
         self.assertRaises(TypeError, GIMarshallingTests.uint_in, "self.MAX")
 
@@ -458,8 +455,8 @@ class TestUInt(unittest.TestCase):
 
 class TestLong(unittest.TestCase):
 
-    MAX = GLib.MAXLONG
-    MIN = GLib.MINLONG
+    MAX = GObject.G_MAXLONG
+    MIN = GObject.G_MINLONG
 
     def test_long_return(self):
         self.assertEqual(self.MAX, GIMarshallingTests.long_return_max())
@@ -475,8 +472,8 @@ class TestLong(unittest.TestCase):
         max.value += 1
         min.value -= 1
 
-        self.assertRaises(OverflowError, GIMarshallingTests.long_in_max, max)
-        self.assertRaises(OverflowError, GIMarshallingTests.long_in_min, min)
+        self.assertRaises(ValueError, GIMarshallingTests.long_in_max, max)
+        self.assertRaises(ValueError, GIMarshallingTests.long_in_min, min)
 
         self.assertRaises(TypeError, GIMarshallingTests.long_in_max, "self.MAX")
 
@@ -491,7 +488,7 @@ class TestLong(unittest.TestCase):
 
 class TestULong(unittest.TestCase):
 
-    MAX = GLib.MAXULONG
+    MAX = GObject.G_MAXULONG
 
     def test_ulong_return(self):
         self.assertEqual(self.MAX, GIMarshallingTests.ulong_return())
@@ -503,8 +500,8 @@ class TestULong(unittest.TestCase):
 
         number.value += 1
 
-        self.assertRaises(OverflowError, GIMarshallingTests.ulong_in, number)
-        self.assertRaises(OverflowError, GIMarshallingTests.ulong_in, Number(-1))
+        self.assertRaises(ValueError, GIMarshallingTests.ulong_in, number)
+        self.assertRaises(ValueError, GIMarshallingTests.ulong_in, Number(-1))
 
         self.assertRaises(TypeError, GIMarshallingTests.ulong_in, "self.MAX")
 
@@ -517,8 +514,8 @@ class TestULong(unittest.TestCase):
 
 class TestSSize(unittest.TestCase):
 
-    MAX = GLib.MAXLONG
-    MIN = GLib.MINLONG
+    MAX = GObject.G_MAXLONG
+    MIN = GObject.G_MINLONG
 
     def test_ssize_return(self):
         self.assertEqual(self.MAX, GIMarshallingTests.ssize_return_max())
@@ -534,8 +531,8 @@ class TestSSize(unittest.TestCase):
         max.value += 1
         min.value -= 1
 
-        self.assertRaises(OverflowError, GIMarshallingTests.ssize_in_max, max)
-        self.assertRaises(OverflowError, GIMarshallingTests.ssize_in_min, min)
+        self.assertRaises(ValueError, GIMarshallingTests.ssize_in_max, max)
+        self.assertRaises(ValueError, GIMarshallingTests.ssize_in_min, min)
 
         self.assertRaises(TypeError, GIMarshallingTests.ssize_in_max, "self.MAX")
 
@@ -550,7 +547,7 @@ class TestSSize(unittest.TestCase):
 
 class TestSize(unittest.TestCase):
 
-    MAX = GLib.MAXULONG
+    MAX = GObject.G_MAXULONG
 
     def test_size_return(self):
         self.assertEqual(self.MAX, GIMarshallingTests.size_return())
@@ -562,8 +559,8 @@ class TestSize(unittest.TestCase):
 
         number.value += 1
 
-        self.assertRaises(OverflowError, GIMarshallingTests.size_in, number)
-        self.assertRaises(OverflowError, GIMarshallingTests.size_in, Number(-1))
+        self.assertRaises(ValueError, GIMarshallingTests.size_in, number)
+        self.assertRaises(ValueError, GIMarshallingTests.size_in, Number(-1))
 
         self.assertRaises(TypeError, GIMarshallingTests.size_in, "self.MAX")
 
@@ -592,8 +589,8 @@ class TestTimet(unittest.TestCase):
 
 class TestFloat(unittest.TestCase):
 
-    MAX = GLib.MAXFLOAT
-    MIN = GLib.MINFLOAT
+    MAX = GObject.G_MAXFLOAT
+    MIN = GObject.G_MINFLOAT
 
     def test_float_return(self):
         self.assertAlmostEqual(self.MAX, GIMarshallingTests.float_return())
@@ -612,8 +609,8 @@ class TestFloat(unittest.TestCase):
 
 class TestDouble(unittest.TestCase):
 
-    MAX = GLib.MAXDOUBLE
-    MIN = GLib.MINDOUBLE
+    MAX = GObject.G_MAXDOUBLE
+    MIN = GObject.G_MINDOUBLE
 
     def test_double_return(self):
         self.assertAlmostEqual(self.MAX, GIMarshallingTests.double_return())
@@ -709,10 +706,6 @@ class TestFilename(unittest.TestCase):
         (result, contents) = GLib.file_get_contents(fname)
         self.assertEqual(result, True)
         self.assertEqual(contents, b'hello world!\n\x01\x02')
-
-    def test_filename_in_nullable(self):
-        self.assertTrue(GIMarshallingTests.filename_copy(None) is None)
-        self.assertRaises(TypeError, GIMarshallingTests.filename_exists, None)
 
     def test_filename_out(self):
         self.assertRaises(GLib.GError, GLib.Dir.make_tmp, 'test')
@@ -820,15 +813,8 @@ class TestArray(unittest.TestCase):
 
         GIMarshallingTests.array_struct_in([struct1, struct2, struct3])
 
-    def test_array_boxed_struct_in_item_marshal_failure(self):
-        struct1 = GIMarshallingTests.BoxedStruct()
-        struct1.long_ = 1
-        struct2 = GIMarshallingTests.BoxedStruct()
-        struct2.long_ = 2
-
-        self.assertRaises(TypeError, GIMarshallingTests.array_struct_in,
-                          [struct1, struct2, 'not_a_struct'])
-
+    @unittest.skipUnless(hasattr(GIMarshallingTests, 'array_struct_value_in'),
+                         'too old gobject-introspection')
     def test_array_boxed_struct_value_in(self):
         struct1 = GIMarshallingTests.BoxedStruct()
         struct1.long_ = 1
@@ -838,15 +824,6 @@ class TestArray(unittest.TestCase):
         struct3.long_ = 3
 
         GIMarshallingTests.array_struct_value_in([struct1, struct2, struct3])
-
-    def test_array_boxed_struct_value_in_item_marshal_failure(self):
-        struct1 = GIMarshallingTests.BoxedStruct()
-        struct1.long_ = 1
-        struct2 = GIMarshallingTests.BoxedStruct()
-        struct2.long_ = 2
-
-        self.assertRaises(TypeError, GIMarshallingTests.array_struct_value_in,
-                          [struct1, struct2, 'not_a_struct'])
 
     def test_array_boxed_struct_take_in(self):
         struct1 = GIMarshallingTests.BoxedStruct()
@@ -878,15 +855,6 @@ class TestArray(unittest.TestCase):
         struct3.long_ = 3
 
         GIMarshallingTests.array_simple_struct_in([struct1, struct2, struct3])
-
-    def test_array_simple_struct_in_item_marshal_failure(self):
-        struct1 = GIMarshallingTests.SimpleStruct()
-        struct1.long_ = 1
-        struct2 = GIMarshallingTests.SimpleStruct()
-        struct2.long_ = 2
-
-        self.assertRaises(TypeError, GIMarshallingTests.array_simple_struct_in,
-                          [struct1, struct2, 'not_a_struct'])
 
     def test_array_multi_array_key_value_in(self):
         GIMarshallingTests.multi_array_key_value_in(["one", "two", "three"],
@@ -968,7 +936,7 @@ class TestGArray(unittest.TestCase):
         self.assertEqual([-1, 0, 1, 2], GIMarshallingTests.garray_int_none_return())
 
     def test_garray_uint64_none_return(self):
-        self.assertEqual([0, GLib.MAXUINT64], GIMarshallingTests.garray_uint64_none_return())
+        self.assertEqual([0, GObject.G_MAXUINT64], GIMarshallingTests.garray_uint64_none_return())
 
     def test_garray_utf8_none_return(self):
         self.assertEqual(['0', '1', '2'], GIMarshallingTests.garray_utf8_none_return())
@@ -988,7 +956,7 @@ class TestGArray(unittest.TestCase):
         self.assertRaises(TypeError, GIMarshallingTests.garray_int_none_in, None)
 
     def test_garray_uint64_none_in(self):
-        GIMarshallingTests.garray_uint64_none_in(Sequence([0, GLib.MAXUINT64]))
+        GIMarshallingTests.garray_uint64_none_in(Sequence([0, GObject.G_MAXUINT64]))
 
     def test_garray_utf8_none_in(self):
         GIMarshallingTests.garray_utf8_none_in(Sequence(['0', '1', '2']))
@@ -1002,6 +970,8 @@ class TestGArray(unittest.TestCase):
     def test_garray_utf8_full_out(self):
         self.assertEqual(['0', '1', '2'], GIMarshallingTests.garray_utf8_full_out())
 
+    @unittest.skipUnless(hasattr(GIMarshallingTests, 'garray_utf8_full_out_caller_allocated'),
+                         'too old gobject-introspection')
     def test_garray_utf8_full_out_caller_allocated(self):
         self.assertEqual(['0', '1', '2'], GIMarshallingTests.garray_utf8_full_out_caller_allocated())
 
@@ -1059,11 +1029,15 @@ class TestGBytes(unittest.TestCase):
         self.assertEqual(3, b.get_size())
         self.assertEqual(b'\x00\x01\xFF', b.get_data())
 
+    @unittest.skipUnless(hasattr(GIMarshallingTests, 'gbytes_full_return'),
+                         'too old gobject-introspection')
     def test_gbytes_full_return(self):
         b = GIMarshallingTests.gbytes_full_return()
         self.assertEqual(4, b.get_size())
         self.assertEqual(b'\x00\x31\xFF\x33', b.get_data())
 
+    @unittest.skipUnless(hasattr(GIMarshallingTests, 'gbytes_full_return'),
+                         'too old gobject-introspection')
     def test_gbytes_none_in(self):
         b = GIMarshallingTests.gbytes_full_return()
         GIMarshallingTests.gbytes_none_in(b)
@@ -1095,18 +1069,7 @@ class TestGByteArray(unittest.TestCase):
         self.assertEqual(b'\x001\xFF3', GIMarshallingTests.bytearray_full_return())
 
     def test_bytearray_none_in(self):
-        b = b'\x00\x31\xFF\x33'
-        ba = GLib.ByteArray.new_take(b)
-
-        # b should always have the same value even
-        # though the generated GByteArray is being modified
-        GIMarshallingTests.bytearray_none_in(b)
-        GIMarshallingTests.bytearray_none_in(b)
-
-        # The GByteArray is just a bytes
-        # thus it will not reflect any changes
-        GIMarshallingTests.bytearray_none_in(ba)
-        GIMarshallingTests.bytearray_none_in(ba)
+        GIMarshallingTests.bytearray_none_in(b'\x00\x31\xFF\x33')
 
 
 class TestGList(unittest.TestCase):
@@ -1115,7 +1078,7 @@ class TestGList(unittest.TestCase):
         self.assertEqual([-1, 0, 1, 2], GIMarshallingTests.glist_int_none_return())
 
     def test_glist_uint32_none_return(self):
-        self.assertEqual([0, GLib.MAXUINT32], GIMarshallingTests.glist_uint32_none_return())
+        self.assertEqual([0, GObject.G_MAXUINT32], GIMarshallingTests.glist_uint32_none_return())
 
     def test_glist_utf8_none_return(self):
         self.assertEqual(['0', '1', '2'], GIMarshallingTests.glist_utf8_none_return())
@@ -1134,16 +1097,8 @@ class TestGList(unittest.TestCase):
         self.assertRaises(TypeError, GIMarshallingTests.glist_int_none_in, 42)
         self.assertRaises(TypeError, GIMarshallingTests.glist_int_none_in, None)
 
-    def test_glist_int_none_in_error_getitem(self):
-
-        class FailingSequence(Sequence):
-            def __getitem__(self, key):
-                raise Exception
-
-        self.assertRaises(Exception, GIMarshallingTests.glist_int_none_in, FailingSequence((-1, 0, 1, 2)))
-
     def test_glist_uint32_none_in(self):
-        GIMarshallingTests.glist_uint32_none_in(Sequence((0, GLib.MAXUINT32)))
+        GIMarshallingTests.glist_uint32_none_in(Sequence((0, GObject.G_MAXUINT32)))
 
     def test_glist_utf8_none_in(self):
         GIMarshallingTests.glist_utf8_none_in(Sequence(('0', '1', '2')))
@@ -1188,14 +1143,6 @@ class TestGSList(unittest.TestCase):
 
         self.assertRaises(TypeError, GIMarshallingTests.gslist_int_none_in, 42)
         self.assertRaises(TypeError, GIMarshallingTests.gslist_int_none_in, None)
-
-    def test_gslist_int_none_in_error_getitem(self):
-
-        class FailingSequence(Sequence):
-            def __getitem__(self, key):
-                raise Exception
-
-        self.assertRaises(Exception, GIMarshallingTests.gslist_int_none_in, FailingSequence((-1, 0, 1, 2)))
 
     def test_gslist_utf8_none_in(self):
         GIMarshallingTests.gslist_utf8_none_in(Sequence(('0', '1', '2')))
@@ -1269,17 +1216,6 @@ class TestGHashTable(unittest.TestCase):
         self.assertEqual({'-1': '1', '0': '0', '1': '1'},
                          GIMarshallingTests.ghashtable_utf8_full_inout(i))
 
-    def test_ghashtable_enum_none_in(self):
-        GIMarshallingTests.ghashtable_enum_none_in({1: GIMarshallingTests.ExtraEnum.VALUE1,
-                                                    2: GIMarshallingTests.ExtraEnum.VALUE2,
-                                                    3: GIMarshallingTests.ExtraEnum.VALUE3})
-
-    def test_ghashtable_enum_none_return(self):
-        self.assertEqual({1: GIMarshallingTests.ExtraEnum.VALUE1,
-                          2: GIMarshallingTests.ExtraEnum.VALUE2,
-                          3: GIMarshallingTests.ExtraEnum.VALUE3},
-                         GIMarshallingTests.ghashtable_enum_none_return())
-
 
 class TestGValue(unittest.TestCase):
 
@@ -1291,13 +1227,8 @@ class TestGValue(unittest.TestCase):
         value = GObject.Value(GObject.TYPE_INT, 42)
         GIMarshallingTests.gvalue_in(value)
 
-    def test_gvalue_in_with_modification(self):
-        value = GObject.Value(GObject.TYPE_INT, 42)
-        GIMarshallingTests.gvalue_in_with_modification(value)
-        self.assertEqual(value.get_int(), 24)
-
     def test_gvalue_int64_in(self):
-        value = GObject.Value(GObject.TYPE_INT64, GLib.MAXINT64)
+        value = GObject.Value(GObject.TYPE_INT64, GObject.G_MAXINT64)
         GIMarshallingTests.gvalue_int64_in(value)
 
     def test_gvalue_in_with_type(self):
@@ -1317,7 +1248,7 @@ class TestGValue(unittest.TestCase):
         self.assertEqual(42, GIMarshallingTests.gvalue_out())
 
     def test_gvalue_int64_out(self):
-        self.assertEqual(GLib.MAXINT64, GIMarshallingTests.gvalue_int64_out())
+        self.assertEqual(GObject.G_MAXINT64, GIMarshallingTests.gvalue_int64_out())
 
     def test_gvalue_out_caller_allocates(self):
         self.assertEqual(42, GIMarshallingTests.gvalue_out_caller_allocates())
@@ -1330,11 +1261,6 @@ class TestGValue(unittest.TestCase):
     def test_gvalue_flat_array_in(self):
         # the function already asserts the correct values
         GIMarshallingTests.gvalue_flat_array([42, "42", True])
-
-    def test_gvalue_flat_array_in_item_marshal_failure(self):
-        # Tests the failure to marshal 2^256 to a GValue mid-way through the array marshaling.
-        self.assertRaises(RuntimeError, GIMarshallingTests.gvalue_flat_array,
-                          [42, 2 ** 256, True])
 
     def test_gvalue_flat_array_out(self):
         values = GIMarshallingTests.return_gvalue_flat_array()
@@ -1554,22 +1480,25 @@ class TestEnum(unittest.TestCase):
         self.assertEqual(GIMarshallingTests.Enum.__gtype__.name,
                          'PyGIMarshallingTestsEnum')
 
+    def test_enum_double_registration_error(self):
+        # a warning is printed for double registration and pygobject will
+        # also raise a RuntimeError.
+        old_mask = GLib.log_set_always_fatal(GLib.LogLevelFlags.LEVEL_ERROR)
+        try:
+            self.assertRaises(RuntimeError,
+                              gi._gi.enum_register_new_gtype_and_add,
+                              GIMarshallingTests.Enum.__info__)
+        finally:
+            GLib.log_set_always_fatal(old_mask)
+
     def test_enum_add_type_error(self):
         self.assertRaises(TypeError,
                           gi._gi.enum_add,
                           GIMarshallingTests.NoTypeFlags.__gtype__)
 
-    def test_type_module_name(self):
-        self.assertEqual(GIMarshallingTests.Enum.__name__, "Enum")
-        self.assertEqual(GIMarshallingTests.Enum.__module__,
-                         "gi.repository.GIMarshallingTests")
 
-    def test_repr(self):
-        self.assertEqual(repr(GIMarshallingTests.Enum.VALUE3),
-                         "<enum GI_MARSHALLING_TESTS_ENUM_VALUE3 of type "
-                         "GIMarshallingTests.Enum>")
-
-
+@unittest.skipUnless(hasattr(GIMarshallingTests.Object, 'vfunc_return_enum'),
+                     'GIMarshallingTests too old')
 class TestEnumVFuncResults(unittest.TestCase):
     class EnumTester(GIMarshallingTests.Object):
         def do_vfunc_return_enum(self):
@@ -1608,7 +1537,6 @@ class TestGEnum(unittest.TestCase):
     def test_genum_in(self):
         GIMarshallingTests.genum_in(GIMarshallingTests.GEnum.VALUE3)
         GIMarshallingTests.genum_in(42)
-        GIMarshallingTests.GEnum.in_(42)
 
         self.assertRaises(TypeError, GIMarshallingTests.genum_in, 43)
         self.assertRaises(TypeError, GIMarshallingTests.genum_in, 'GIMarshallingTests.GEnum.VALUE3')
@@ -1620,7 +1548,6 @@ class TestGEnum(unittest.TestCase):
 
     def test_genum_out(self):
         genum = GIMarshallingTests.genum_out()
-        genum = GIMarshallingTests.GEnum.out()
         self.assertTrue(isinstance(genum, GIMarshallingTests.GEnum))
         self.assertEqual(genum, GIMarshallingTests.GEnum.VALUE3)
 
@@ -1628,16 +1555,6 @@ class TestGEnum(unittest.TestCase):
         genum = GIMarshallingTests.genum_inout(GIMarshallingTests.GEnum.VALUE3)
         self.assertTrue(isinstance(genum, GIMarshallingTests.GEnum))
         self.assertEqual(genum, GIMarshallingTests.GEnum.VALUE1)
-
-    def test_type_module_name(self):
-        self.assertEqual(GIMarshallingTests.GEnum.__name__, "GEnum")
-        self.assertEqual(GIMarshallingTests.GEnum.__module__,
-                         "gi.repository.GIMarshallingTests")
-
-    def test_repr(self):
-        self.assertEqual(repr(GIMarshallingTests.GEnum.VALUE3),
-                         "<enum GI_MARSHALLING_TESTS_GENUM_VALUE3 of type "
-                         "GIMarshallingTests.GEnum>")
 
 
 class TestGFlags(unittest.TestCase):
@@ -1663,22 +1580,15 @@ class TestGFlags(unittest.TestCase):
 
     def test_flags_in(self):
         GIMarshallingTests.flags_in(GIMarshallingTests.Flags.VALUE2)
-        GIMarshallingTests.Flags.in_(GIMarshallingTests.Flags.VALUE2)
         # result of __or__() operation should still be valid instance, not an int.
         GIMarshallingTests.flags_in(GIMarshallingTests.Flags.VALUE2 | GIMarshallingTests.Flags.VALUE2)
         GIMarshallingTests.flags_in_zero(Number(0))
-        GIMarshallingTests.Flags.in_zero(Number(0))
 
         self.assertRaises(TypeError, GIMarshallingTests.flags_in, 1 << 1)
         self.assertRaises(TypeError, GIMarshallingTests.flags_in, 'GIMarshallingTests.Flags.VALUE2')
 
     def test_flags_return(self):
         flags = GIMarshallingTests.flags_returnv()
-        self.assertTrue(isinstance(flags, GIMarshallingTests.Flags))
-        self.assertEqual(flags, GIMarshallingTests.Flags.VALUE2)
-
-    def test_flags_return_method(self):
-        flags = GIMarshallingTests.Flags.returnv()
         self.assertTrue(isinstance(flags, GIMarshallingTests.Flags))
         self.assertEqual(flags, GIMarshallingTests.Flags.VALUE2)
 
@@ -1691,16 +1601,6 @@ class TestGFlags(unittest.TestCase):
         flags = GIMarshallingTests.flags_inout(GIMarshallingTests.Flags.VALUE2)
         self.assertTrue(isinstance(flags, GIMarshallingTests.Flags))
         self.assertEqual(flags, GIMarshallingTests.Flags.VALUE1)
-
-    def test_type_module_name(self):
-        self.assertEqual(GIMarshallingTests.Flags.__name__, "Flags")
-        self.assertEqual(GIMarshallingTests.Flags.__module__,
-                         "gi.repository.GIMarshallingTests")
-
-    def test_repr(self):
-        self.assertEqual(repr(GIMarshallingTests.Flags.VALUE2),
-                         "<flags GI_MARSHALLING_TESTS_FLAGS_VALUE2 of type "
-                         "GIMarshallingTests.Flags>")
 
 
 class TestNoTypeFlags(unittest.TestCase):
@@ -1751,16 +1651,16 @@ class TestNoTypeFlags(unittest.TestCase):
         self.assertEqual(GIMarshallingTests.NoTypeFlags.__gtype__.name,
                          'PyGIMarshallingTestsNoTypeFlags')
 
-    def test_type_module_name(self):
-        self.assertEqual(GIMarshallingTests.NoTypeFlags.__name__,
-                         "NoTypeFlags")
-        self.assertEqual(GIMarshallingTests.NoTypeFlags.__module__,
-                         "gi.repository.GIMarshallingTests")
-
-    def test_repr(self):
-        self.assertEqual(repr(GIMarshallingTests.NoTypeFlags.VALUE2),
-                         "<flags GI_MARSHALLING_TESTS_NO_TYPE_FLAGS_VALUE2 of "
-                         "type GIMarshallingTests.NoTypeFlags>")
+    def test_flags_double_registration_error(self):
+        # a warning is printed for double registration and pygobject will
+        # also raise a RuntimeError.
+        old_mask = GLib.log_set_always_fatal(GLib.LogLevelFlags.LEVEL_ERROR)
+        try:
+            self.assertRaises(RuntimeError,
+                              gi._gi.flags_register_new_gtype_and_add,
+                              GIMarshallingTests.NoTypeFlags.__info__)
+        finally:
+            GLib.log_set_always_fatal(old_mask)
 
 
 class TestStructure(unittest.TestCase):
@@ -1857,6 +1757,8 @@ class TestStructure(unittest.TestCase):
 
         del struct
 
+    @unittest.skipUnless(hasattr(GIMarshallingTests.BoxedStruct, 'string_'),
+                         'too old gobject-introspection')
     def test_boxed_struct(self):
         self.assertTrue(issubclass(GIMarshallingTests.BoxedStruct, GObject.GBoxed))
 
@@ -1869,6 +1771,8 @@ class TestStructure(unittest.TestCase):
 
         del struct
 
+    @unittest.skipUnless(hasattr(GIMarshallingTests.BoxedStruct, 'string_'),
+                         'too old gobject-introspection')
     def test_boxed_struct_new(self):
         struct = GIMarshallingTests.BoxedStruct.new()
         self.assertTrue(isinstance(struct, GIMarshallingTests.BoxedStruct))
@@ -1877,6 +1781,8 @@ class TestStructure(unittest.TestCase):
 
         del struct
 
+    @unittest.skipUnless(hasattr(GIMarshallingTests.BoxedStruct, 'string_'),
+                         'too old gobject-introspection')
     def test_boxed_struct_copy(self):
         struct = GIMarshallingTests.BoxedStruct()
         struct.long_ = 42
@@ -1890,6 +1796,8 @@ class TestStructure(unittest.TestCase):
         del new_struct
         del struct
 
+    @unittest.skipUnless(hasattr(GIMarshallingTests.BoxedStruct, 'string_'),
+                         'too old gobject-introspection')
     def test_boxed_struct_return(self):
         struct = GIMarshallingTests.boxed_struct_returnv()
 
@@ -1936,19 +1844,6 @@ class TestStructure(unittest.TestCase):
         self.assertEqual(struct.long_, 42)
         self.assertEqual(struct.string_, 'hello')
 
-    def test_union_init(self):
-        with warnings.catch_warnings(record=True) as warn:
-            warnings.simplefilter('always')
-            GIMarshallingTests.Union(42)
-
-        self.assertTrue(issubclass(warn[0].category, TypeError))
-
-        with warnings.catch_warnings(record=True) as warn:
-            warnings.simplefilter('always')
-            GIMarshallingTests.Union(f=42)
-
-        self.assertTrue(issubclass(warn[0].category, TypeError))
-
     def test_union(self):
         union = GIMarshallingTests.Union()
 
@@ -1985,27 +1880,6 @@ class TestStructure(unittest.TestCase):
         del union
 
         self.assertRaises(TypeError, GIMarshallingTests.Union.method)
-
-    def test_repr(self):
-        self.assertRegexpMatches(
-            repr(GIMarshallingTests.PointerStruct()),
-            "<GIMarshallingTests.PointerStruct object at 0x[^\s]+ "
-            "\(void at 0x[^\s]+\)>")
-
-        self.assertRegexpMatches(
-            repr(GIMarshallingTests.SimpleStruct()),
-            "<GIMarshallingTests.SimpleStruct object at 0x[^\s]+ "
-            "\(void at 0x[^\s]+\)>")
-
-        self.assertRegexpMatches(
-            repr(GIMarshallingTests.Union()),
-            "<GIMarshallingTests.Union object at 0x[^\s]+ "
-            "\(GIMarshallingTestsUnion at 0x[^\s]+\)>")
-
-        self.assertRegexpMatches(
-            repr(GIMarshallingTests.BoxedStruct()),
-            "<GIMarshallingTests.BoxedStruct object at 0x[^\s]+ "
-            "\(GIMarshallingTestsBoxedStruct at 0x[^\s]+\)>")
 
 
 class TestGObject(unittest.TestCase):
@@ -2124,9 +1998,6 @@ class TestGObject(unittest.TestCase):
         GIMarshallingTests.Object.none_inout(GIMarshallingTests.SubObject(int=42))
 
     def test_object_full_inout(self):
-        # Using gimarshallingtests.c from GI versions > 1.38.0 will show this
-        # test as an "unexpected success" due to reference leak fixes in that file.
-        # TODO: remove the expectedFailure once PyGI relies on GI > 1.38.0.
         object_ = GIMarshallingTests.Object(int=42)
         new_object = GIMarshallingTests.Object.full_inout(object_)
 
@@ -2134,20 +2005,8 @@ class TestGObject(unittest.TestCase):
 
         self.assertFalse(object_ is new_object)
 
-        self.assertEqual(object_.__grefcount__, 1)
+        self.assertEqual(object_.__grefcount__, 2)
         self.assertEqual(new_object.__grefcount__, 1)
-
-    def test_repr(self):
-        self.assertRegexpMatches(
-            repr(GIMarshallingTests.Object(int=42)),
-            "<GIMarshallingTests.Object object at 0x[^\s]+ "
-            "\(GIMarshallingTestsObject at 0x[^\s]+\)>")
-
-    def test_nongir_repr(self):
-        self.assertRegexpMatches(
-            repr(Gio.File.new_for_path("")),
-            "<__gi__.GLocalFile object at 0x[^\s]+ "
-            "\(GLocalFile at 0x[^\s]+\)>")
 
 # FIXME: Doesn't actually return the same object.
 #    def test_object_inout_same(self):
@@ -2228,21 +2087,11 @@ class TestPythonGObject(unittest.TestCase):
             self.variants = variants
             self.n_variants = n_variants
 
-    class ErrorObject(GIMarshallingTests.Object):
-        def do_vfunc_return_value_only(self):
-            raise ValueError('Return value should be 0')
-
     def test_object(self):
         self.assertTrue(issubclass(self.Object, GIMarshallingTests.Object))
 
         object_ = self.Object(int=42)
         self.assertTrue(isinstance(object_, self.Object))
-
-    @unittest.skipUnless(hasattr(GIMarshallingTests.Object, 'new_fail'),
-                         'Requires newer version of GI')
-    def test_object_fail(self):
-        with self.assertRaises(GLib.Error):
-            GIMarshallingTests.Object.new_fail(int_=42)
 
     def test_object_method(self):
         self.Object(int=0).method()
@@ -2305,8 +2154,12 @@ class TestPythonGObject(unittest.TestCase):
         object_ = self.SubObject(int=1)
         self.assertEqual(object_.vfunc_return_value_only(), 2121)
 
+    def test_dynamic_module(self):
+        from gi.module import DynamicModule
+        self.assertTrue(isinstance(GObject, DynamicModule))
+
     def test_subobject_non_vfunc_do_method(self):
-        class PythonObjectWithNonVFuncDoMethod(object):
+        class PythonObjectWithNonVFuncDoMethod:
             def do_not_a_vfunc(self):
                 return 5
 
@@ -2393,26 +2246,6 @@ class TestPythonGObject(unittest.TestCase):
         _object.call_vfunc_with_callback()
         self.assertTrue(_object.worked)
 
-    def test_exception_in_vfunc_return_value(self):
-        obj = self.ErrorObject()
-        with capture_exceptions() as exc:
-            self.assertEqual(obj.vfunc_return_value_only(), 0)
-        self.assertEqual(len(exc), 1)
-        self.assertEqual(exc[0].type, ValueError)
-
-    @unittest.skipUnless(hasattr(GIMarshallingTests, 'callback_owned_boxed'),
-                         'requires newer version of GI')
-    def test_callback_owned_box(self):
-        def callback(box, data):
-            self.box = box
-
-        def nop_callback(box, data):
-            pass
-
-        GIMarshallingTests.callback_owned_boxed(callback, None)
-        GIMarshallingTests.callback_owned_boxed(nop_callback, None)
-        self.assertEqual(self.box.long_, 1)
-
 
 class TestMultiOutputArgs(unittest.TestCase):
 
@@ -2477,6 +2310,22 @@ class TestInterfaces(unittest.TestCase):
         self.assertEqual(instance.val, None)
         self.assertEqual(instance.val2, 42)
 
+    def test_mro(self):
+        # there was a problem with Python bailing out because of
+        # http://en.wikipedia.org/wiki/Diamond_problem with interfaces,
+        # which shouldn't really be a problem.
+
+        class TestInterfaceImpl(GObject.GObject, GIMarshallingTests.Interface):
+            pass
+
+        class TestInterfaceImpl2(GIMarshallingTests.Interface,
+                                 TestInterfaceImpl):
+            pass
+
+        class TestInterfaceImpl3(self.TestInterfaceImpl,
+                                 GIMarshallingTests.Interface2):
+            pass
+
     def test_type_mismatch(self):
         obj = GIMarshallingTests.Object()
 
@@ -2499,12 +2348,16 @@ class TestInterfaces(unittest.TestCase):
             Gio.FileEnumerator.next_file(obj, None)
             self.fail('call with wrong type argument unexpectedly succeeded')
         except TypeError as e:
-            # should have argument name
-            self.assertTrue('self' in str(e), e)
-            # should have expected type
-            self.assertTrue('xpected Gio.FileEnumerator' in str(e), e)
-            # should have actual type
-            self.assertTrue('GIMarshallingTests.Object' in str(e), e)
+            if sys.version_info < (3, 0):
+                self.assertTrue('FileEnumerator' in str(e), e)
+                self.assertTrue('Object' in str(e), e)
+            else:
+                # should have argument name
+                self.assertTrue('self' in str(e), e)
+                # should have expected type
+                self.assertTrue('xpected Gio.FileEnumerator' in str(e), e)
+                # should have actual type
+                self.assertTrue('GIMarshallingTests.Object' in str(e), e)
 
         # wrong type for first argument: GObject
         var = GLib.Variant('s', 'mystring')
@@ -2525,70 +2378,16 @@ class TestInterfaces(unittest.TestCase):
             Gio.SimpleAction.activate(obj, obj)
             self.fail('call with wrong type argument unexpectedly succeeded')
         except TypeError as e:
-            # should have argument name
-            self.assertTrue('self' in str(e), e)
-            # should have expected type
-            self.assertTrue('xpected Gio.Action' in str(e), e)
-            # should have actual type
-            self.assertTrue('GIMarshallingTests.Object' in str(e), e)
-
-
-class TestMRO(unittest.TestCase):
-    def test_mro(self):
-        # check that our own MRO calculation matches what we would expect
-        # from Python's own C3 calculations
-        class A(object):
-            pass
-
-        class B(A):
-            pass
-
-        class C(A):
-            pass
-
-        class D(B, C):
-            pass
-
-        class E(D, GIMarshallingTests.Object):
-            pass
-
-        expected = (E, D, B, C, A, GIMarshallingTests.Object,
-                    GObject.Object, GObject.Object.__base__, gi._gi._gobject.GObject,
-                    object)
-        self.assertEqual(expected, E.__mro__)
-
-    def test_interface_collision(self):
-        # there was a problem with Python bailing out because of
-        # http://en.wikipedia.org/wiki/Diamond_problem with interfaces,
-        # which shouldn't really be a problem.
-
-        class TestInterfaceImpl(GObject.GObject, GIMarshallingTests.Interface):
-            pass
-
-        class TestInterfaceImpl2(GIMarshallingTests.Interface,
-                                 TestInterfaceImpl):
-            pass
-
-        class TestInterfaceImpl3(TestInterfaceImpl,
-                                 GIMarshallingTests.Interface2):
-            pass
-
-    def test_old_style_mixin(self):
-        # Note: Old style classes don't exist in Python 3
-        class Mixin:
-            pass
-
-        with warnings.catch_warnings(record=True) as warn:
-            warnings.simplefilter('always')
-
-            # Dynamically create a new gi based class with an old
-            # style mixin.
-            type('GIWithOldStyleMixin', (GIMarshallingTests.Object, Mixin), {})
-
             if sys.version_info < (3, 0):
-                self.assertTrue(issubclass(warn[0].category, RuntimeWarning))
+                self.assertTrue('SimpleAction' in str(e), e)
+                self.assertTrue('Object' in str(e), e)
             else:
-                self.assertEqual(len(warn), 0)
+                # should have argument name
+                self.assertTrue('self' in str(e), e)
+                # should have expected type
+                self.assertTrue('xpected Gio.Action' in str(e), e)
+                # should have actual type
+                self.assertTrue('GIMarshallingTests.Object' in str(e), e)
 
 
 class TestInterfaceClash(unittest.TestCase):
@@ -2653,7 +2452,9 @@ class TestOverrides(unittest.TestCase):
 
         # not overridden
         self.assertEqual(GIMarshallingTests.SubObject.__module__, 'gi.repository.GIMarshallingTests')
-        self.assertEqual(GObject.InitiallyUnowned.__module__, 'gi.repository.GObject')
+        # FIXME: does not work with TEST_NAMES='test_thread test_gi.TestOverrides',
+        # it is importlib._bootstrap then
+        #self.assertEqual(GObject.InitiallyUnowned.__module__, 'gi.repository.GObject')
 
 
 class TestDir(unittest.TestCase):
@@ -2681,8 +2482,59 @@ class TestDir(unittest.TestCase):
         # self.assertTrue('DoNotImportDummyTests' in list)
 
 
+class TestGError(unittest.TestCase):
+    def test_array_in_crash(self):
+        # Previously there was a bug in invoke, in which C arrays were unwrapped
+        # from inside GArrays to be passed to the C function. But when a GError was
+        # set, invoke would attempt to free the C array as if it were a GArray.
+        # This crash is only for C arrays. It does not happen for C functions which
+        # take in GArrays. See https://bugzilla.gnome.org/show_bug.cgi?id=642708
+        self.assertRaises(GObject.GError, GIMarshallingTests.gerror_array_in, [1, 2, 3])
+
+    def test_out(self):
+        # See https://bugzilla.gnome.org/show_bug.cgi?id=666098
+        error, debug = GIMarshallingTests.gerror_out()
+
+        self.assertIsInstance(error, GObject.GError)
+        self.assertEqual(error.domain, GIMarshallingTests.CONSTANT_GERROR_DOMAIN)
+        self.assertEqual(error.code, GIMarshallingTests.CONSTANT_GERROR_CODE)
+        self.assertEqual(error.message, GIMarshallingTests.CONSTANT_GERROR_MESSAGE)
+        self.assertEqual(debug, GIMarshallingTests.CONSTANT_GERROR_DEBUG_MESSAGE)
+
+    def test_out_transfer_none(self):
+        # See https://bugzilla.gnome.org/show_bug.cgi?id=666098
+        error, debug = GIMarshallingTests.gerror_out_transfer_none()
+
+        self.assertIsInstance(error, GObject.GError)
+        self.assertEqual(error.domain, GIMarshallingTests.CONSTANT_GERROR_DOMAIN)
+        self.assertEqual(error.code, GIMarshallingTests.CONSTANT_GERROR_CODE)
+        self.assertEqual(error.message, GIMarshallingTests.CONSTANT_GERROR_MESSAGE)
+        self.assertEqual(GIMarshallingTests.CONSTANT_GERROR_DEBUG_MESSAGE, debug)
+
+    def test_return(self):
+        # See https://bugzilla.gnome.org/show_bug.cgi?id=666098
+        error = GIMarshallingTests.gerror_return()
+
+        self.assertIsInstance(error, GObject.GError)
+        self.assertEqual(error.domain, GIMarshallingTests.CONSTANT_GERROR_DOMAIN)
+        self.assertEqual(error.code, GIMarshallingTests.CONSTANT_GERROR_CODE)
+        self.assertEqual(error.message, GIMarshallingTests.CONSTANT_GERROR_MESSAGE)
+
+    def test_exception(self):
+        self.assertRaises(GObject.GError, GIMarshallingTests.gerror)
+        try:
+            GIMarshallingTests.gerror()
+        except Exception:
+            etype, e = sys.exc_info()[:2]
+            self.assertEqual(e.domain, GIMarshallingTests.CONSTANT_GERROR_DOMAIN)
+            self.assertEqual(e.code, GIMarshallingTests.CONSTANT_GERROR_CODE)
+            self.assertEqual(e.message, GIMarshallingTests.CONSTANT_GERROR_MESSAGE)
+
+
 class TestParamSpec(unittest.TestCase):
     # https://bugzilla.gnome.org/show_bug.cgi?id=682355
+    @unittest.skipUnless(hasattr(GIMarshallingTests, 'param_spec_in_bool'),
+                         'too old gobject-introspection')
     @unittest.expectedFailure
     def test_param_spec_in_bool(self):
         ps = GObject.param_spec_boolean('mybool', 'test-bool', 'boolblurb',
@@ -2730,29 +2582,29 @@ class TestKeywordArgs(unittest.TestCase):
 
     def test_type_errors(self):
         # test too few args
-        self.assertRaisesMessage(TypeError, "GIMarshallingTests.int_three_in_three_out() takes exactly 3 arguments (0 given)",
+        self.assertRaisesMessage(TypeError, "int_three_in_three_out() takes exactly 3 arguments (0 given)",
                                  GIMarshallingTests.int_three_in_three_out)
-        self.assertRaisesMessage(TypeError, "GIMarshallingTests.int_three_in_three_out() takes exactly 3 arguments (1 given)",
+        self.assertRaisesMessage(TypeError, "int_three_in_three_out() takes exactly 3 arguments (1 given)",
                                  GIMarshallingTests.int_three_in_three_out, 1)
-        self.assertRaisesMessage(TypeError, "GIMarshallingTests.int_three_in_three_out() takes exactly 3 arguments (0 given)",
+        self.assertRaisesMessage(TypeError, "int_three_in_three_out() takes exactly 3 arguments (0 given)",
                                  GIMarshallingTests.int_three_in_three_out, *())
-        self.assertRaisesMessage(TypeError, "GIMarshallingTests.int_three_in_three_out() takes exactly 3 arguments (0 given)",
+        self.assertRaisesMessage(TypeError, "int_three_in_three_out() takes exactly 3 arguments (0 given)",
                                  GIMarshallingTests.int_three_in_three_out, *(), **{})
-        self.assertRaisesMessage(TypeError, "GIMarshallingTests.int_three_in_three_out() takes exactly 3 non-keyword arguments (0 given)",
+        self.assertRaisesMessage(TypeError, "int_three_in_three_out() takes exactly 3 non-keyword arguments (0 given)",
                                  GIMarshallingTests.int_three_in_three_out, *(), **{'c': 4})
 
         # test too many args
-        self.assertRaisesMessage(TypeError, "GIMarshallingTests.int_three_in_three_out() takes exactly 3 arguments (4 given)",
+        self.assertRaisesMessage(TypeError, "int_three_in_three_out() takes exactly 3 arguments (4 given)",
                                  GIMarshallingTests.int_three_in_three_out, *(1, 2, 3, 4))
-        self.assertRaisesMessage(TypeError, "GIMarshallingTests.int_three_in_three_out() takes exactly 3 non-keyword arguments (4 given)",
+        self.assertRaisesMessage(TypeError, "int_three_in_three_out() takes exactly 3 non-keyword arguments (4 given)",
                                  GIMarshallingTests.int_three_in_three_out, *(1, 2, 3, 4), c=6)
 
         # test too many keyword args
-        self.assertRaisesMessage(TypeError, "GIMarshallingTests.int_three_in_three_out() got multiple values for keyword argument 'a'",
+        self.assertRaisesMessage(TypeError, "int_three_in_three_out() got multiple values for keyword argument 'a'",
                                  GIMarshallingTests.int_three_in_three_out, 1, 2, 3, **{'a': 4, 'b': 5})
-        self.assertRaisesMessage(TypeError, "GIMarshallingTests.int_three_in_three_out() got an unexpected keyword argument 'd'",
+        self.assertRaisesMessage(TypeError, "int_three_in_three_out() got an unexpected keyword argument 'd'",
                                  GIMarshallingTests.int_three_in_three_out, d=4)
-        self.assertRaisesMessage(TypeError, "GIMarshallingTests.int_three_in_three_out() got an unexpected keyword argument 'e'",
+        self.assertRaisesMessage(TypeError, "int_three_in_three_out() got an unexpected keyword argument 'e'",
                                  GIMarshallingTests.int_three_in_three_out, **{'e': 2})
 
     def test_kwargs_are_not_modified(self):
@@ -2761,35 +2613,218 @@ class TestKeywordArgs(unittest.TestCase):
         GIMarshallingTests.int_three_in_three_out(1, c=4, **d)
         self.assertEqual(d, d2)
 
-    @unittest.skipUnless(hasattr(GIMarshallingTests, 'int_one_in_utf8_two_in_one_allows_none'),
-                         'Requires newer GIMarshallingTests')
-    def test_allow_none_as_default(self):
-        GIMarshallingTests.int_two_in_utf8_two_in_with_allow_none(1, 2, '3', '4')
-        GIMarshallingTests.int_two_in_utf8_two_in_with_allow_none(1, 2, '3')
-        GIMarshallingTests.int_two_in_utf8_two_in_with_allow_none(1, 2)
-        GIMarshallingTests.int_two_in_utf8_two_in_with_allow_none(1, 2, d='4')
 
-        GIMarshallingTests.array_in_utf8_two_in_out_of_order('1', [-1, 0, 1, 2])
-        GIMarshallingTests.array_in_utf8_two_in_out_of_order('1', [-1, 0, 1, 2], '2')
-        self.assertRaises(TypeError,
-                          GIMarshallingTests.array_in_utf8_two_in_out_of_order,
-                          [-1, 0, 1, 2], a='1')
-        self.assertRaises(TypeError,
-                          GIMarshallingTests.array_in_utf8_two_in_out_of_order,
-                          [-1, 0, 1, 2])
+class TestPropertiesObject(unittest.TestCase):
 
-        GIMarshallingTests.array_in_utf8_two_in([-1, 0, 1, 2], '1', '2')
-        GIMarshallingTests.array_in_utf8_two_in([-1, 0, 1, 2], '1')
-        GIMarshallingTests.array_in_utf8_two_in([-1, 0, 1, 2])
-        GIMarshallingTests.array_in_utf8_two_in([-1, 0, 1, 2], b='2')
+    def setUp(self):
+        self.obj = GIMarshallingTests.PropertiesObject()
 
-        GIMarshallingTests.int_one_in_utf8_two_in_one_allows_none(1, '2', '3')
-        self.assertRaises(TypeError,
-                          GIMarshallingTests.int_one_in_utf8_two_in_one_allows_none,
-                          1, '3')
-        self.assertRaises(TypeError,
-                          GIMarshallingTests.int_one_in_utf8_two_in_one_allows_none,
-                          1, c='3')
+    def test_boolean(self):
+        self.assertEqual(self.obj.props.some_boolean, False)
+        self.obj.props.some_boolean = True
+        self.assertEqual(self.obj.props.some_boolean, True)
+
+        obj = GIMarshallingTests.PropertiesObject(some_boolean=True)
+        self.assertEqual(obj.props.some_boolean, True)
+
+    def test_char(self):
+        self.assertEqual(self.obj.props.some_char, 0)
+        self.obj.props.some_char = GObject.G_MAXINT8
+        self.assertEqual(self.obj.props.some_char, GObject.G_MAXINT8)
+
+        obj = GIMarshallingTests.PropertiesObject(some_char=-42)
+        self.assertEqual(obj.props.some_char, -42)
+
+    def test_uchar(self):
+        self.assertEqual(self.obj.props.some_uchar, 0)
+        self.obj.props.some_uchar = GObject.G_MAXUINT8
+        self.assertEqual(self.obj.props.some_uchar, GObject.G_MAXUINT8)
+
+        obj = GIMarshallingTests.PropertiesObject(some_uchar=42)
+        self.assertEqual(obj.props.some_uchar, 42)
+
+    def test_int(self):
+        self.assertEqual(self.obj.props.some_int, 0)
+        self.obj.props.some_int = GObject.G_MAXINT
+        self.assertEqual(self.obj.props.some_int, GObject.G_MAXINT)
+
+        obj = GIMarshallingTests.PropertiesObject(some_int=-42)
+        self.assertEqual(obj.props.some_int, -42)
+
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_int', 'foo')
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_int', None)
+
+        self.assertEqual(obj.props.some_int, -42)
+
+    def test_uint(self):
+        self.assertEqual(self.obj.props.some_uint, 0)
+        self.obj.props.some_uint = GObject.G_MAXUINT
+        self.assertEqual(self.obj.props.some_uint, GObject.G_MAXUINT)
+
+        obj = GIMarshallingTests.PropertiesObject(some_uint=42)
+        self.assertEqual(obj.props.some_uint, 42)
+
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_uint', 'foo')
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_uint', None)
+
+        self.assertEqual(obj.props.some_uint, 42)
+
+    def test_long(self):
+        self.assertEqual(self.obj.props.some_long, 0)
+        self.obj.props.some_long = GObject.G_MAXLONG
+        self.assertEqual(self.obj.props.some_long, GObject.G_MAXLONG)
+
+        obj = GIMarshallingTests.PropertiesObject(some_long=-42)
+        self.assertEqual(obj.props.some_long, -42)
+
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_long', 'foo')
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_long', None)
+
+        self.assertEqual(obj.props.some_long, -42)
+
+    def test_ulong(self):
+        self.assertEqual(self.obj.props.some_ulong, 0)
+        self.obj.props.some_ulong = GObject.G_MAXULONG
+        self.assertEqual(self.obj.props.some_ulong, GObject.G_MAXULONG)
+
+        obj = GIMarshallingTests.PropertiesObject(some_ulong=42)
+        self.assertEqual(obj.props.some_ulong, 42)
+
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_ulong', 'foo')
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_ulong', None)
+
+        self.assertEqual(obj.props.some_ulong, 42)
+
+    def test_int64(self):
+        self.assertEqual(self.obj.props.some_int64, 0)
+        self.obj.props.some_int64 = GObject.G_MAXINT64
+        self.assertEqual(self.obj.props.some_int64, GObject.G_MAXINT64)
+
+        obj = GIMarshallingTests.PropertiesObject(some_int64=-4200000000000000)
+        self.assertEqual(obj.props.some_int64, -4200000000000000)
+
+    def test_uint64(self):
+        self.assertEqual(self.obj.props.some_uint64, 0)
+        self.obj.props.some_uint64 = GObject.G_MAXUINT64
+        self.assertEqual(self.obj.props.some_uint64, GObject.G_MAXUINT64)
+
+        obj = GIMarshallingTests.PropertiesObject(some_uint64=4200000000000000)
+        self.assertEqual(obj.props.some_uint64, 4200000000000000)
+
+    def test_float(self):
+        self.assertEqual(self.obj.props.some_float, 0)
+        self.obj.props.some_float = GObject.G_MAXFLOAT
+        self.assertEqual(self.obj.props.some_float, GObject.G_MAXFLOAT)
+
+        obj = GIMarshallingTests.PropertiesObject(some_float=42.42)
+        self.assertAlmostEqual(obj.props.some_float, 42.42, 4)
+
+        obj = GIMarshallingTests.PropertiesObject(some_float=42)
+        self.assertAlmostEqual(obj.props.some_float, 42.0, 4)
+
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_float', 'foo')
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_float', None)
+
+        self.assertAlmostEqual(obj.props.some_float, 42.0, 4)
+
+    def test_double(self):
+        self.assertEqual(self.obj.props.some_double, 0)
+        self.obj.props.some_double = GObject.G_MAXDOUBLE
+        self.assertEqual(self.obj.props.some_double, GObject.G_MAXDOUBLE)
+
+        obj = GIMarshallingTests.PropertiesObject(some_double=42.42)
+        self.assertAlmostEqual(obj.props.some_double, 42.42)
+
+        obj = GIMarshallingTests.PropertiesObject(some_double=42)
+        self.assertAlmostEqual(obj.props.some_double, 42.0)
+
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_double', 'foo')
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_double', None)
+
+        self.assertAlmostEqual(obj.props.some_double, 42.0)
+
+    def test_strv(self):
+        self.assertEqual(self.obj.props.some_strv, [])
+        self.obj.props.some_strv = ['hello', 'world']
+        self.assertEqual(self.obj.props.some_strv, ['hello', 'world'])
+
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_strv', 1)
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_strv', 'foo')
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_strv', [1, 2])
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_strv', ['foo', 1])
+
+        self.assertEqual(self.obj.props.some_strv, ['hello', 'world'])
+
+        obj = GIMarshallingTests.PropertiesObject(some_strv=['hello', 'world'])
+        self.assertEqual(obj.props.some_strv, ['hello', 'world'])
+
+    def test_boxed_struct(self):
+        self.assertEqual(self.obj.props.some_boxed_struct, None)
+
+        class GStrv(list):
+            __gtype__ = GObject.TYPE_STRV
+
+        struct1 = GIMarshallingTests.BoxedStruct()
+        struct1.long_ = 1
+
+        self.obj.props.some_boxed_struct = struct1
+        self.assertEqual(self.obj.props.some_boxed_struct.long_, 1)
+        self.assertEqual(self.obj.some_boxed_struct.long_, 1)
+
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_boxed_struct', 1)
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_boxed_struct', 'foo')
+
+        obj = GIMarshallingTests.PropertiesObject(some_boxed_struct=struct1)
+        self.assertEqual(obj.props.some_boxed_struct.long_, 1)
+
+    @unittest.skipUnless(hasattr(GIMarshallingTests.PropertiesObject, 'some_boxed_glist'),
+                         'too old gobject-introspection')
+    def test_boxed_glist(self):
+        self.assertEqual(self.obj.props.some_boxed_glist, [])
+
+        l = [GObject.G_MININT, 42, GObject.G_MAXINT]
+        self.obj.props.some_boxed_glist = l
+        self.assertEqual(self.obj.props.some_boxed_glist, l)
+        self.obj.props.some_boxed_glist = []
+        self.assertEqual(self.obj.props.some_boxed_glist, [])
+
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_boxed_glist', 1)
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_boxed_glist', 'foo')
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_boxed_glist', ['a'])
+
+    @unittest.expectedFailure
+    def test_boxed_glist_ctor(self):
+        l = [GObject.G_MININT, 42, GObject.G_MAXINT]
+        obj = GIMarshallingTests.PropertiesObject(some_boxed_glist=l)
+        self.assertEqual(obj.props.some_boxed_glist, l)
+
+    @unittest.skipUnless(hasattr(GIMarshallingTests.PropertiesObject, 'some_variant'),
+                         'too old gobject-introspection')
+    def test_variant(self):
+        self.assertEqual(self.obj.props.some_variant, None)
+
+        self.obj.props.some_variant = GLib.Variant('o', '/myobj')
+        self.assertEqual(self.obj.props.some_variant.get_type_string(), 'o')
+        self.assertEqual(self.obj.props.some_variant.print_(False), "'/myobj'")
+
+        self.obj.props.some_variant = None
+        self.assertEqual(self.obj.props.some_variant, None)
+
+        obj = GIMarshallingTests.PropertiesObject(some_variant=GLib.Variant('b', True))
+        self.assertEqual(obj.props.some_variant.get_type_string(), 'b')
+        self.assertEqual(obj.props.some_variant.get_boolean(), True)
+
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_variant', 'foo')
+        self.assertRaises(TypeError, setattr, self.obj.props, 'some_variant', 23)
+
+        self.assertEqual(obj.props.some_variant.get_type_string(), 'b')
+        self.assertEqual(obj.props.some_variant.get_boolean(), True)
+
+    def test_setting_several_properties(self):
+        obj = GIMarshallingTests.PropertiesObject()
+        obj.set_properties(some_uchar=54, some_int=42)
+        self.assertEqual(42, obj.props.some_int)
+        self.assertEqual(54, obj.props.some_uchar)
 
 
 class TestKeywords(unittest.TestCase):
@@ -2854,7 +2889,7 @@ class TestModule(unittest.TestCase):
 
 class TestProjectVersion(unittest.TestCase):
     def test_version_str(self):
-        self.assertGreater(gi.__version__, "3.")
+        self.assertGreaterEqual(gi.__version__, "3.3.5")
 
     def test_version_info(self):
         self.assertEqual(len(gi.version_info), 3)
@@ -2867,18 +2902,46 @@ class TestProjectVersion(unittest.TestCase):
         gi.check_version("3.3.5")
 
 
-class TestGIWarning(unittest.TestCase):
+class TestObjectInfo(unittest.TestCase):
+    def test_get_abstract_with_abstract(self):
+        repo = gi.gi.Repository.get_default()
+        info = repo.find_by_name('GObject', 'TypeModule')
+        self.assertTrue(info.get_abstract())
 
-    def test_warning(self):
-        ignored_by_default = (DeprecationWarning, PendingDeprecationWarning,
-                              ImportWarning)
+    def test_get_abstract_with_concrete(self):
+        repo = gi.gi.Repository.get_default()
+        info = repo.find_by_name('GObject', 'Object')
+        self.assertFalse(info.get_abstract())
 
-        with warnings.catch_warnings(record=True) as warn:
-            warnings.simplefilter('always')
-            warnings.warn("test", PyGIWarning)
-            self.assertTrue(issubclass(warn[0].category, Warning))
-            # We don't want PyGIWarning get ignored by default
-            self.assertFalse(issubclass(warn[0].category, ignored_by_default))
+
+class TestSignatureArgs(unittest.TestCase):
+    def test_split_args_multi_out(self):
+        in_args, out_args = gi.types.split_function_info_args(GIMarshallingTests.int_out_out.__info__)
+        self.assertEqual(len(in_args), 0)
+        self.assertEqual(len(out_args), 2)
+        self.assertEqual(out_args[0].get_pytype_hint(), 'int')
+        self.assertEqual(out_args[1].get_pytype_hint(), 'int')
+
+    def test_split_args_inout(self):
+        in_args, out_args = gi.types.split_function_info_args(GIMarshallingTests.long_inout_max_min.__info__)
+        self.assertEqual(len(in_args), 1)
+        self.assertEqual(len(out_args), 1)
+        self.assertEqual(in_args[0].get_name(), out_args[0].get_name())
+        self.assertEqual(in_args[0].get_pytype_hint(), out_args[0].get_pytype_hint())
+
+    def test_split_args_none(self):
+        obj = GIMarshallingTests.Object(int=33)
+        in_args, out_args = gi.types.split_function_info_args(obj.none_inout.__info__)
+        self.assertEqual(len(in_args), 1)
+        self.assertEqual(len(out_args), 1)
+
+    def test_final_signature_with_full_inout(self):
+        self.assertEqual(GIMarshallingTests.Object.full_inout.__doc__,
+                         'full_inout(object:GIMarshallingTests.Object) -> object:GIMarshallingTests.Object')
+
+    def test_overridden_doc_is_not_clobbered(self):
+        self.assertEqual(GIMarshallingTests.OverridesObject.method.__doc__,
+                         'Overridden doc string.')
 
 
 class TestDeprecation(unittest.TestCase):
@@ -2888,156 +2951,3 @@ class TestDeprecation(unittest.TestCase):
             warnings.simplefilter('always')
             d.set_time(1)
             self.assertTrue(issubclass(warn[0].category, DeprecationWarning))
-            self.assertEqual(str(warn[0].message), "GLib.Date.set_time is deprecated")
-
-    def test_function(self):
-        with warnings.catch_warnings(record=True) as warn:
-            warnings.simplefilter('always')
-            GLib.strcasecmp("foo", "bar")
-            self.assertTrue(issubclass(warn[0].category, DeprecationWarning))
-            self.assertEqual(str(warn[0].message), "GLib.strcasecmp is deprecated")
-
-    def test_deprecated_attribute_compat(self):
-        # test if the deprecation descriptor behaves like an instance attribute
-
-        # save the descriptor
-        desc = type(GLib).__dict__["IO_STATUS_ERROR"]
-
-        # the descriptor raises AttributeError for itself
-        self.assertFalse(hasattr(type(GLib), "IO_STATUS_ERROR"))
-
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore', PyGIDeprecationWarning)
-            self.assertTrue(hasattr(GLib, "IO_STATUS_ERROR"))
-
-        try:
-            # check if replacing works
-            GLib.IO_STATUS_ERROR = "foo"
-            self.assertEqual(GLib.IO_STATUS_ERROR, "foo")
-        finally:
-            # restore descriptor
-            try:
-                del GLib.IO_STATUS_ERROR
-            except AttributeError:
-                pass
-            setattr(type(GLib), "IO_STATUS_ERROR", desc)
-
-        try:
-            # check if deleting works
-            del GLib.IO_STATUS_ERROR
-            self.assertFalse(hasattr(GLib, "IO_STATUS_ERROR"))
-        finally:
-            # restore descriptor
-            try:
-                del GLib.IO_STATUS_ERROR
-            except AttributeError:
-                pass
-            setattr(type(GLib), "IO_STATUS_ERROR", desc)
-
-    def test_deprecated_attribute_warning(self):
-        with warnings.catch_warnings(record=True) as warn:
-            warnings.simplefilter('always')
-            self.assertEqual(GLib.IO_STATUS_ERROR, GLib.IOStatus.ERROR)
-            GLib.IO_STATUS_ERROR
-            GLib.IO_STATUS_ERROR
-            self.assertEqual(len(warn), 3)
-            self.assertTrue(
-                issubclass(warn[0].category, PyGIDeprecationWarning))
-            self.assertRegexpMatches(
-                str(warn[0].message),
-                ".*GLib.IO_STATUS_ERROR.*GLib.IOStatus.ERROR.*")
-
-    def test_deprecated_attribute_warning_coverage(self):
-        with warnings.catch_warnings(record=True) as warn:
-            warnings.simplefilter('always')
-            GObject.markup_escape_text
-            GObject.PRIORITY_DEFAULT
-            GObject.GError
-            GObject.PARAM_CONSTRUCT
-            GObject.SIGNAL_ACTION
-            GObject.property
-            GObject.IO_STATUS_ERROR
-            GObject.G_MAXUINT64
-            GLib.IO_STATUS_ERROR
-            GLib.SPAWN_SEARCH_PATH
-            GLib.OPTION_FLAG_HIDDEN
-            GLib.IO_FLAG_IS_WRITEABLE
-            GLib.IO_FLAG_NONBLOCK
-            GLib.USER_DIRECTORY_DESKTOP
-            GLib.OPTION_ERROR_BAD_VALUE
-            GLib.glib_version
-            GLib.pyglib_version
-            self.assertEqual(len(warn), 17)
-
-    def test_deprecated_init_no_keywords(self):
-        def init(self, **kwargs):
-            self.assertDictEqual(kwargs, {'a': 1, 'b': 2, 'c': 3})
-
-        fn = gi.overrides.deprecated_init(init, arg_names=('a', 'b', 'c'))
-        with warnings.catch_warnings(record=True) as warn:
-            warnings.simplefilter('always')
-            fn(self, 1, 2, 3)
-            self.assertEqual(len(warn), 1)
-            self.assertTrue(issubclass(warn[0].category, PyGIDeprecationWarning))
-            self.assertRegexpMatches(str(warn[0].message),
-                                     '.*keyword.*a, b, c.*')
-
-    def test_deprecated_init_no_keywords_out_of_order(self):
-        def init(self, **kwargs):
-            self.assertDictEqual(kwargs, {'a': 1, 'b': 2, 'c': 3})
-
-        fn = gi.overrides.deprecated_init(init, arg_names=('b', 'a', 'c'))
-        with warnings.catch_warnings(record=True) as warn:
-            warnings.simplefilter('always')
-            fn(self, 2, 1, 3)
-            self.assertEqual(len(warn), 1)
-            self.assertTrue(issubclass(warn[0].category, PyGIDeprecationWarning))
-            self.assertRegexpMatches(str(warn[0].message),
-                                     '.*keyword.*b, a, c.*')
-
-    def test_deprecated_init_ignored_keyword(self):
-        def init(self, **kwargs):
-            self.assertDictEqual(kwargs, {'a': 1, 'c': 3})
-
-        fn = gi.overrides.deprecated_init(init,
-                                          arg_names=('a', 'b', 'c'),
-                                          ignore=('b',))
-        with warnings.catch_warnings(record=True) as warn:
-            warnings.simplefilter('always')
-            fn(self, 1, 2, 3)
-            self.assertEqual(len(warn), 1)
-            self.assertTrue(issubclass(warn[0].category, PyGIDeprecationWarning))
-            self.assertRegexpMatches(str(warn[0].message),
-                                     '.*keyword.*a, b, c.*')
-
-    def test_deprecated_init_with_aliases(self):
-        def init(self, **kwargs):
-            self.assertDictEqual(kwargs, {'a': 1, 'b': 2, 'c': 3})
-
-        fn = gi.overrides.deprecated_init(init,
-                                          arg_names=('a', 'b', 'c'),
-                                          deprecated_aliases={'b': 'bb', 'c': 'cc'})
-        with warnings.catch_warnings(record=True) as warn:
-            warnings.simplefilter('always')
-
-            fn(self, a=1, bb=2, cc=3)
-            self.assertEqual(len(warn), 1)
-            self.assertTrue(issubclass(warn[0].category, PyGIDeprecationWarning))
-            self.assertRegexpMatches(str(warn[0].message),
-                                     '.*keyword.*"bb, cc".*deprecated.*"b, c" respectively')
-
-    def test_deprecated_init_with_defaults(self):
-        def init(self, **kwargs):
-            self.assertDictEqual(kwargs, {'a': 1, 'b': 2, 'c': 3})
-
-        fn = gi.overrides.deprecated_init(init,
-                                          arg_names=('a', 'b', 'c'),
-                                          deprecated_defaults={'b': 2, 'c': 3})
-        with warnings.catch_warnings(record=True) as warn:
-            warnings.simplefilter('always')
-            fn(self, a=1)
-            self.assertEqual(len(warn), 1)
-            self.assertTrue(issubclass(warn[0].category, PyGIDeprecationWarning))
-            self.assertRegexpMatches(str(warn[0].message),
-                                     '.*relying on deprecated non-standard defaults.*'
-                                     'explicitly use: b=2, c=3')

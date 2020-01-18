@@ -19,12 +19,9 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301
 # USA
 
-import collections
 import sys
-import warnings
-
 from gi.repository import GObject
-from ..overrides import override, strip_boolean_result, deprecated_init
+from ..overrides import override, strip_boolean_result
 from ..module import get_introspection_module
 from gi import PyGIDeprecationWarning
 
@@ -40,6 +37,7 @@ Gtk = get_introspection_module('Gtk')
 __all__ = []
 
 if Gtk._version == '2.0':
+    import warnings
     warn_msg = "You have imported the Gtk 2.0 module.  Because Gtk 2.0 \
 was not designed for use with introspection some of the \
 interfaces and API will fail.  As such this is not supported \
@@ -48,12 +46,6 @@ port your app to Gtk 3 or greater. PyGTK is the recomended \
 python module to use with Gtk 2.0"
 
     warnings.warn(warn_msg, RuntimeWarning)
-
-
-class PyGTKDeprecationWarning(PyGIDeprecationWarning):
-    pass
-
-__all__.append('PyGTKDeprecationWarning')
 
 
 def _construct_target_list(targets):
@@ -72,73 +64,22 @@ def _construct_target_list(targets):
 __all__.append('_construct_target_list')
 
 
-def _extract_handler_and_args(obj_or_map, handler_name):
-    handler = None
-    if isinstance(obj_or_map, collections.Mapping):
-        handler = obj_or_map.get(handler_name, None)
-    else:
-        handler = getattr(obj_or_map, handler_name, None)
-
-    if handler is None:
-        raise AttributeError('Handler %s not found' % handler_name)
-
-    args = ()
-    if isinstance(handler, collections.Sequence):
-        if len(handler) == 0:
-            raise TypeError("Handler %s tuple can not be empty" % handler)
-        args = handler[1:]
-        handler = handler[0]
-
-    elif not _callable(handler):
-        raise TypeError('Handler %s is not a method, function or tuple' % handler)
-
-    return handler, args
-
-
-# Exposed for unit-testing.
-__all__.append('_extract_handler_and_args')
-
-
-def _builder_connect_callback(builder, gobj, signal_name, handler_name, connect_obj, flags, obj_or_map):
-    handler, args = _extract_handler_and_args(obj_or_map, handler_name)
-
-    after = flags & GObject.ConnectFlags.AFTER
-    if connect_obj is not None:
-        if after:
-            gobj.connect_object_after(signal_name, handler, connect_obj, *args)
-        else:
-            gobj.connect_object(signal_name, handler, connect_obj, *args)
-    else:
-        if after:
-            gobj.connect_after(signal_name, handler, *args)
-        else:
-            gobj.connect(signal_name, handler, *args)
-
-
 class Widget(Gtk.Widget):
 
     translate_coordinates = strip_boolean_result(Gtk.Widget.translate_coordinates)
 
+    def render_icon(self, stock_id, size, detail=None):
+        return super(Widget, self).render_icon(stock_id, size, detail)
+
     def drag_dest_set_target_list(self, target_list):
-        if (target_list is not None) and (not isinstance(target_list, Gtk.TargetList)):
+        if not isinstance(target_list, Gtk.TargetList):
             target_list = Gtk.TargetList.new(_construct_target_list(target_list))
         super(Widget, self).drag_dest_set_target_list(target_list)
 
     def drag_source_set_target_list(self, target_list):
-        if (target_list is not None) and (not isinstance(target_list, Gtk.TargetList)):
+        if not isinstance(target_list, Gtk.TargetList):
             target_list = Gtk.TargetList.new(_construct_target_list(target_list))
         super(Widget, self).drag_source_set_target_list(target_list)
-
-    def style_get_property(self, property_name, value=None):
-        if value is None:
-            prop = self.find_style_property(property_name)
-            if prop is None:
-                raise ValueError('Class "%s" does not contain style property "%s"' %
-                                 (self, property_name))
-            value = GObject.Value(prop.value_type)
-
-        Gtk.Widget.style_get_property(self, property_name, value)
-        return value.get_value()
 
 
 Widget = override(Widget)
@@ -164,27 +105,6 @@ class Container(Gtk.Container, Widget):
 
     get_focus_chain = strip_boolean_result(Gtk.Container.get_focus_chain)
 
-    def child_get_property(self, child, property_name, value=None):
-        if value is None:
-            prop = self.find_child_property(property_name)
-            if prop is None:
-                raise ValueError('Class "%s" does not contain child property "%s"' %
-                                 (self, property_name))
-            value = GObject.Value(prop.value_type)
-
-        Gtk.Container.child_get_property(self, child, property_name, value)
-        return value.get_value()
-
-    def child_get(self, child, *prop_names):
-        """Returns a list of child property values for the given names."""
-        return [self.child_get_property(child, name) for name in prop_names]
-
-    def child_set(self, child, **kwargs):
-        """Set a child properties on the given child to key/value pairs."""
-        for name, value in kwargs.items():
-            name = name.replace('_', '-')
-            self.child_set_property(child, name, value)
-
 
 Container = override(Container)
 __all__.append('Container')
@@ -203,27 +123,24 @@ __all__.append("Editable")
 
 
 class Action(Gtk.Action):
-    __init__ = deprecated_init(Gtk.Action.__init__,
-                               arg_names=('name', 'label', 'tooltip', 'stock_id'),
-                               category=PyGTKDeprecationWarning)
+    def __init__(self, name, label, tooltip, stock_id, **kwds):
+        Gtk.Action.__init__(self, name=name, label=label, tooltip=tooltip, stock_id=stock_id, **kwds)
 
 Action = override(Action)
 __all__.append("Action")
 
 
 class RadioAction(Gtk.RadioAction):
-    __init__ = deprecated_init(Gtk.RadioAction.__init__,
-                               arg_names=('name', 'label', 'tooltip', 'stock_id', 'value'),
-                               category=PyGTKDeprecationWarning)
+    def __init__(self, name, label, tooltip, stock_id, value, **kwds):
+        Gtk.RadioAction.__init__(self, name=name, label=label, tooltip=tooltip, stock_id=stock_id, value=value, **kwds)
 
 RadioAction = override(RadioAction)
 __all__.append("RadioAction")
 
 
 class ActionGroup(Gtk.ActionGroup):
-    __init__ = deprecated_init(Gtk.ActionGroup.__init__,
-                               arg_names=('name',),
-                               category=PyGTKDeprecationWarning)
+    def __init__(self, name, **kwds):
+        super(ActionGroup, self).__init__(name=name, **kwds)
 
     def add_actions(self, entries, user_data=None):
         """
@@ -257,7 +174,7 @@ class ActionGroup(Gtk.ActionGroup):
             raise TypeError('entries must be iterable')
 
         def _process_action(name, stock_id=None, label=None, accelerator=None, tooltip=None, callback=None):
-            action = Action(name=name, label=label, tooltip=tooltip, stock_id=stock_id)
+            action = Action(name, label, tooltip, stock_id)
             if callback is not None:
                 if user_data is None:
                     action.connect('activate', callback)
@@ -305,7 +222,7 @@ class ActionGroup(Gtk.ActionGroup):
             raise TypeError('entries must be iterable')
 
         def _process_action(name, stock_id=None, label=None, accelerator=None, tooltip=None, callback=None, is_active=False):
-            action = Gtk.ToggleAction(name=name, label=label, tooltip=tooltip, stock_id=stock_id)
+            action = Gtk.ToggleAction(name, label, tooltip, stock_id)
             action.set_active(is_active)
             if callback is not None:
                 if user_data is None:
@@ -355,7 +272,7 @@ class ActionGroup(Gtk.ActionGroup):
         first_action = None
 
         def _process_action(group_source, name, stock_id=None, label=None, accelerator=None, tooltip=None, entry_value=0):
-            action = RadioAction(name=name, label=label, tooltip=tooltip, stock_id=stock_id, value=entry_value)
+            action = RadioAction(name, label, tooltip, stock_id, entry_value)
 
             # FIXME: join_group is a patch to Gtk+ 3.0
             #        otherwise we can't effectively add radio actions to a
@@ -411,47 +328,63 @@ __all__.append('ComboBox')
 
 
 class Box(Gtk.Box):
-    __init__ = deprecated_init(Gtk.Box.__init__,
-                               arg_names=('homogeneous', 'spacing'),
-                               category=PyGTKDeprecationWarning)
+    def __init__(self, homogeneous=False, spacing=0, **kwds):
+        super(Box, self).__init__(**kwds)
+        self.set_homogeneous(homogeneous)
+        self.set_spacing(spacing)
 
 Box = override(Box)
 __all__.append('Box')
 
 
 class SizeGroup(Gtk.SizeGroup):
-    __init__ = deprecated_init(Gtk.SizeGroup.__init__,
-                               arg_names=('mode',),
-                               deprecated_defaults={'mode': Gtk.SizeGroupMode.VERTICAL},
-                               category=PyGTKDeprecationWarning)
+    def __init__(self, mode=Gtk.SizeGroupMode.VERTICAL):
+        super(SizeGroup, self).__init__(mode=mode)
 
 SizeGroup = override(SizeGroup)
 __all__.append('SizeGroup')
 
 
 class MenuItem(Gtk.MenuItem):
-    __init__ = deprecated_init(Gtk.MenuItem.__init__,
-                               arg_names=('label',),
-                               category=PyGTKDeprecationWarning)
+    def __init__(self, label=None, **kwds):
+        if label:
+            super(MenuItem, self).__init__(label=label, **kwds)
+        else:
+            super(MenuItem, self).__init__(**kwds)
 
 MenuItem = override(MenuItem)
 __all__.append('MenuItem')
 
 
 class Builder(Gtk.Builder):
+
     def connect_signals(self, obj_or_map):
-        """Connect signals specified by this builder to a name, handler mapping.
+        def _full_callback(builder, gobj, signal_name, handler_name, connect_obj, flags, obj_or_map):
+            handler = None
+            if isinstance(obj_or_map, dict):
+                handler = obj_or_map.get(handler_name, None)
+            else:
+                handler = getattr(obj_or_map, handler_name, None)
 
-        Connect signal, name, and handler sets specified in the builder with
-        the given mapping "obj_or_map". The handler/value aspect of the mapping
-        can also contain a tuple in the form of (handler [,arg1 [,argN]])
-        allowing for extra arguments to be passed to the handler. For example:
+            if handler is None:
+                raise AttributeError('Handler %s not found' % handler_name)
 
-        .. code-block:: python
+            if not _callable(handler):
+                raise TypeError('Handler %s is not a method or function' % handler_name)
 
-            builder.connect_signals({'on_clicked': (on_clicked, arg1, arg2)})
-        """
-        self.connect_signals_full(_builder_connect_callback, obj_or_map)
+            after = flags & GObject.ConnectFlags.AFTER
+            if connect_obj is not None:
+                if after:
+                    gobj.connect_object_after(signal_name, handler, connect_obj)
+                else:
+                    gobj.connect_object(signal_name, handler, connect_obj)
+            else:
+                if after:
+                    gobj.connect_after(signal_name, handler)
+                else:
+                    gobj.connect(signal_name, handler)
+
+        self.connect_signals_full(_full_callback, obj_or_map)
 
     def add_from_string(self, buffer):
         if not isinstance(buffer, _basestring):
@@ -478,66 +411,56 @@ __all__.append('Builder')
 
 
 class Window(Gtk.Window):
-    __init__ = deprecated_init(Gtk.Window.__init__,
-                               arg_names=('type',),
-                               category=PyGTKDeprecationWarning)
+    def __init__(self, type=Gtk.WindowType.TOPLEVEL, **kwds):
+        if not initialized:
+            raise RuntimeError("Gtk couldn't be initialized")
+
+        # type is a construct-only property; if it is already set (e. g. by
+        # GtkBuilder), do not try to set it again and just ignore it
+        try:
+            self.get_property('type')
+            Gtk.Window.__init__(self, **kwds)
+        except TypeError:
+            Gtk.Window.__init__(self, type=type, **kwds)
 
 Window = override(Window)
 __all__.append('Window')
 
 
 class Dialog(Gtk.Dialog, Container):
-    _old_arg_names = ('title', 'parent', 'flags', 'buttons', '_buttons_property')
-    _init = deprecated_init(Gtk.Dialog.__init__,
-                            arg_names=('title', 'transient_for', 'flags',
-                                       'add_buttons', 'buttons'),
-                            ignore=('flags', 'add_buttons'),
-                            deprecated_aliases={'transient_for': 'parent',
-                                                'buttons': '_buttons_property'},
-                            category=PyGTKDeprecationWarning)
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self,
+                 title=None,
+                 parent=None,
+                 flags=0,
+                 buttons=None,
+                 _buttons_property=None,
+                 **kwds):
 
-        new_kwargs = kwargs.copy()
-        old_kwargs = dict(zip(self._old_arg_names, args))
-        old_kwargs.update(kwargs)
+        # buttons is overloaded by PyGtk so we have to do the same here
+        # this breaks some subclasses of Dialog so add a _buttons_property
+        # keyword to work around this
+        if _buttons_property is not None:
+            kwds['buttons'] = _buttons_property
 
-        # Increment the warning stacklevel for sub-classes which implement their own __init__.
-        stacklevel = 2
-        if self.__class__ != Dialog and self.__class__.__init__ != Dialog.__init__:
-            stacklevel += 1
+        Gtk.Dialog.__init__(self, **kwds)
+        if title:
+            self.set_title(title)
+        if parent:
+            self.set_transient_for(parent)
+        if flags & Gtk.DialogFlags.MODAL:
+            self.set_modal(True)
+        if flags & Gtk.DialogFlags.DESTROY_WITH_PARENT:
+            self.set_destroy_with_parent(True)
 
-        # buttons was overloaded by PyGtk but is needed for Gtk.MessageDialog
-        # as a pass through, so type check the argument and give a deprecation
-        # when it is not of type Gtk.ButtonsType
-        add_buttons = old_kwargs.get('buttons', None)
-        if add_buttons is not None and not isinstance(add_buttons, Gtk.ButtonsType):
-            warnings.warn('The "buttons" argument must be a Gtk.ButtonsType enum value. '
-                          'Please use the "add_buttons" method for adding buttons. '
-                          'See: https://wiki.gnome.org/PyGObject/InitializerDeprecations',
-                          PyGTKDeprecationWarning, stacklevel=stacklevel)
-            if 'buttons' in new_kwargs:
-                del new_kwargs['buttons']
-        else:
-            add_buttons = None
+        # NO_SEPARATOR has been removed from Gtk 3
+        if hasattr(Gtk.DialogFlags, "NO_SEPARATOR") and (flags & Gtk.DialogFlags.NO_SEPARATOR):
+            self.set_has_separator(False)
+            import warnings
+            warnings.warn("Gtk.DialogFlags.NO_SEPARATOR has been depricated since Gtk+-3.0", PyGIDeprecationWarning)
 
-        flags = old_kwargs.get('flags', 0)
-        if flags:
-            warnings.warn('The "flags" argument for dialog construction is deprecated. '
-                          'Please use initializer keywords: modal=True and/or destroy_with_parent=True. '
-                          'See: https://wiki.gnome.org/PyGObject/InitializerDeprecations',
-                          PyGTKDeprecationWarning, stacklevel=stacklevel)
-
-            if flags & Gtk.DialogFlags.MODAL:
-                new_kwargs['modal'] = True
-
-            if flags & Gtk.DialogFlags.DESTROY_WITH_PARENT:
-                new_kwargs['destroy_with_parent'] = True
-
-        self._init(*args, **new_kwargs)
-
-        if add_buttons:
-            self.add_buttons(*add_buttons)
+        if buttons is not None:
+            self.add_buttons(*buttons)
 
     action_area = property(lambda dialog: dialog.get_action_area())
     vbox = property(lambda dialog: dialog.get_content_area())
@@ -550,9 +473,7 @@ class Dialog(Gtk.Dialog, Container):
         pairs - button text (or stock ID) and a response ID integer are passed
         individually. For example:
 
-        .. code-block:: python
-
-            dialog.add_buttons(Gtk.STOCK_OPEN, 42, "Close", Gtk.ResponseType.CLOSE)
+        >>> dialog.add_buttons(Gtk.STOCK_OPEN, 42, "Close", Gtk.ResponseType.CLOSE)
 
         will add "Open" and "Close" buttons to dialog.
         """
@@ -573,12 +494,29 @@ __all__.append('Dialog')
 
 
 class MessageDialog(Gtk.MessageDialog, Dialog):
-    __init__ = deprecated_init(Gtk.MessageDialog.__init__,
-                               arg_names=('parent', 'flags', 'message_type',
-                                          'buttons', 'message_format'),
-                               deprecated_aliases={'text': 'message_format',
-                                                   'message_type': 'type'},
-                               category=PyGTKDeprecationWarning)
+    def __init__(self,
+                 parent=None,
+                 flags=0,
+                 message_type=Gtk.MessageType.INFO,
+                 buttons=Gtk.ButtonsType.NONE,
+                 message_format=None,
+                 **kwds):
+
+        if message_format:
+            kwds['text'] = message_format
+
+        # type keyword is used for backwards compat with PyGTK
+        if 'type' in kwds:
+            import warnings
+            warnings.warn("The use of the keyword type as a parameter of the Gtk.MessageDialog constructor has been depricated. Please use message_type instead.", PyGIDeprecationWarning)
+            message_type = kwds.pop('type')
+
+        Gtk.MessageDialog.__init__(self,
+                                   _buttons_property=buttons,
+                                   message_type=message_type,
+                                   parent=parent,
+                                   flags=flags,
+                                   **kwds)
 
     def format_secondary_text(self, message_format):
         self.set_property('secondary-use-markup', False)
@@ -592,49 +530,70 @@ MessageDialog = override(MessageDialog)
 __all__.append('MessageDialog')
 
 
+class AboutDialog(Gtk.AboutDialog):
+    def __init__(self, **kwds):
+        Gtk.AboutDialog.__init__(self, **kwds)
+
+AboutDialog = override(AboutDialog)
+__all__.append('AboutDialog')
+
+
 class ColorSelectionDialog(Gtk.ColorSelectionDialog):
-    __init__ = deprecated_init(Gtk.ColorSelectionDialog.__init__,
-                               arg_names=('title',),
-                               category=PyGTKDeprecationWarning)
+    def __init__(self, title=None, **kwds):
+        Gtk.ColorSelectionDialog.__init__(self, title=title, **kwds)
 
 ColorSelectionDialog = override(ColorSelectionDialog)
 __all__.append('ColorSelectionDialog')
 
 
 class FileChooserDialog(Gtk.FileChooserDialog):
-    __init__ = deprecated_init(Gtk.FileChooserDialog.__init__,
-                               arg_names=('title', 'parent', 'action', 'buttons'),
-                               category=PyGTKDeprecationWarning)
-
+    def __init__(self,
+                 title=None,
+                 parent=None,
+                 action=Gtk.FileChooserAction.OPEN,
+                 buttons=None,
+                 **kwds):
+        Gtk.FileChooserDialog.__init__(self,
+                                       action=action,
+                                       title=title,
+                                       parent=parent,
+                                       buttons=buttons,
+                                       **kwds)
 FileChooserDialog = override(FileChooserDialog)
 __all__.append('FileChooserDialog')
 
 
 class FontSelectionDialog(Gtk.FontSelectionDialog):
-    __init__ = deprecated_init(Gtk.FontSelectionDialog.__init__,
-                               arg_names=('title',),
-                               category=PyGTKDeprecationWarning)
+    def __init__(self, title=None, **kwds):
+        Gtk.FontSelectionDialog.__init__(self, title=title, **kwds)
 
 FontSelectionDialog = override(FontSelectionDialog)
 __all__.append('FontSelectionDialog')
 
 
 class RecentChooserDialog(Gtk.RecentChooserDialog):
-    # Note, the "manager" keyword must work across the entire 3.x series because
-    # "recent_manager" is not backwards compatible with PyGObject versions prior to 3.10.
-    __init__ = deprecated_init(Gtk.RecentChooserDialog.__init__,
-                               arg_names=('title', 'parent', 'recent_manager', 'buttons'),
-                               deprecated_aliases={'recent_manager': 'manager'},
-                               category=PyGTKDeprecationWarning)
+    def __init__(self,
+                 title=None,
+                 parent=None,
+                 manager=None,
+                 buttons=None,
+                 **kwds):
+
+        Gtk.RecentChooserDialog.__init__(self,
+                                         recent_manager=manager,
+                                         title=title,
+                                         parent=parent,
+                                         buttons=buttons,
+                                         **kwds)
 
 RecentChooserDialog = override(RecentChooserDialog)
 __all__.append('RecentChooserDialog')
 
 
 class IconView(Gtk.IconView):
-    __init__ = deprecated_init(Gtk.IconView.__init__,
-                               arg_names=('model',),
-                               category=PyGTKDeprecationWarning)
+
+    def __init__(self, model=None, **kwds):
+        Gtk.IconView.__init__(self, model=model, **kwds)
 
     get_item_at_pos = strip_boolean_result(Gtk.IconView.get_item_at_pos)
     get_visible_range = strip_boolean_result(Gtk.IconView.get_visible_range)
@@ -645,9 +604,9 @@ __all__.append('IconView')
 
 
 class ToolButton(Gtk.ToolButton):
-    __init__ = deprecated_init(Gtk.ToolButton.__init__,
-                               arg_names=('stock_id',),
-                               category=PyGTKDeprecationWarning)
+
+    def __init__(self, stock_id=None, **kwds):
+        Gtk.ToolButton.__init__(self, stock_id=stock_id, **kwds)
 
 ToolButton = override(ToolButton)
 __all__.append('ToolButton')
@@ -677,27 +636,24 @@ class TextBuffer(Gtk.TextBuffer):
         return table
 
     def create_tag(self, tag_name=None, **properties):
-        """Creates a tag and adds it to the tag table of the TextBuffer.
+        """
+        @tag_name: name of the new tag, or None
+        @properties: keyword list of properties and their values
 
-        :param str tag_name:
-            Name of the new tag, or None
-        :param **properties:
-            Keyword list of properties and their values
-
-        This is equivalent to creating a Gtk.TextTag and then adding the
+        Creates a tag and adds it to the tag table of the TextBuffer.
+        Equivalent to creating a Gtk.TextTag and then adding the
         tag to the buffer's tag table. The returned tag is owned by
         the buffer's tag table.
 
-        If ``tag_name`` is None, the tag is anonymous.
+        If @tag_name is None, the tag is anonymous.
 
-        If ``tag_name`` is not None, a tag called ``tag_name`` must not already
+        If @tag_name is not None, a tag called @tag_name must not already
         exist in the tag table for this buffer.
 
         Properties are passed as a keyword list of names and values (e.g.
-        foreground='DodgerBlue', weight=Pango.Weight.BOLD)
+        foreground = 'DodgerBlue', weight = Pango.Weight.BOLD)
 
-        :returns:
-            A new tag.
+        Return value: a new tag
         """
 
         tag = Gtk.TextTag(name=tag_name, **properties)
@@ -755,8 +711,18 @@ __all__.append('TextBuffer')
 
 
 class TextIter(Gtk.TextIter):
+
     forward_search = strip_boolean_result(Gtk.TextIter.forward_search)
     backward_search = strip_boolean_result(Gtk.TextIter.backward_search)
+
+    def begins_tag(self, tag=None):
+        return super(TextIter, self).begins_tag(tag)
+
+    def ends_tag(self, tag=None):
+        return super(TextIter, self).ends_tag(tag)
+
+    def toggles_tag(self, tag=None):
+        return super(TextIter, self).toggles_tag(tag)
 
 TextIter = override(TextIter)
 __all__.append('TextIter')
@@ -889,6 +855,9 @@ class TreeModel(Gtk.TreeModel):
 
         return tuple(values)
 
+    def filter_new(self, root=None):
+        return super(TreeModel, self).filter_new(root)
+
     #
     # Signals supporting python iterables as tree paths
     #
@@ -929,9 +898,8 @@ __all__.append('TreeSortable')
 
 
 class TreeModelSort(Gtk.TreeModelSort):
-    __init__ = deprecated_init(Gtk.TreeModelSort.__init__,
-                               arg_names=('model',),
-                               category=PyGTKDeprecationWarning)
+    def __init__(self, model, **kwds):
+        Gtk.TreeModelSort.__init__(self, model=model, **kwds)
 
 TreeModelSort = override(TreeModelSort)
 __all__.append('TreeModelSort')
@@ -1079,11 +1047,8 @@ class TreeModelRow(object):
             for i in range(start, stop, step):
                 alist.append(self.model.get_value(self.iter, i))
             return alist
-        elif isinstance(key, tuple):
-            return [self[k] for k in key]
         else:
-            raise TypeError("indices must be integers, slice or tuple, not %s"
-                            % type(key).__name__)
+            raise TypeError("indices must be integers, not %s" % type(key).__name__)
 
     def __setitem__(self, key, value):
         if isinstance(key, int):
@@ -1102,16 +1067,8 @@ class TreeModelRow(object):
 
             for i, v in enumerate(indexList):
                 self.model.set_value(self.iter, v, value[i])
-        elif isinstance(key, tuple):
-            if len(key) != len(value):
-                raise ValueError(
-                    "attempt to assign sequence of size %d to sequence of size %d"
-                    % (len(value), len(key)))
-            for k, v in zip(key, value):
-                self[k] = v
         else:
-            raise TypeError("indices must be an integer, slice or tuple, not %s"
-                            % type(key).__name__)
+            raise TypeError("index must be an integer or slice, not %s" % type(key).__name__)
 
     def _convert_negative_index(self, index):
         new_index = self.model.get_n_columns() + index
@@ -1163,20 +1120,17 @@ class TreePath(Gtk.TreePath):
         except TypeError:
             raise TypeError("could not parse subscript '%s' as a tree path" % path)
 
-    def __init__(self, *args, **kwargs):
-        super(TreePath, self).__init__()
-
     def __str__(self):
         return self.to_string()
 
     def __lt__(self, other):
-        return other is not None and self.compare(other) < 0
+        return not other is None and self.compare(other) < 0
 
     def __le__(self, other):
-        return other is not None and self.compare(other) <= 0
+        return not other is None and self.compare(other) <= 0
 
     def __eq__(self, other):
-        return other is not None and self.compare(other) == 0
+        return not other is None and self.compare(other) == 0
 
     def __ne__(self, other):
         return other is None or self.compare(other) != 0
@@ -1201,6 +1155,7 @@ __all__.append('TreePath')
 
 
 class TreeStore(Gtk.TreeStore, TreeModel, TreeSortable):
+
     def __init__(self, *column_types):
         Gtk.TreeStore.__init__(self)
         self.set_column_types(column_types)
@@ -1280,9 +1235,11 @@ __all__.append('TreeStore')
 
 
 class TreeView(Gtk.TreeView, Container):
-    __init__ = deprecated_init(Gtk.TreeView.__init__,
-                               arg_names=('model',),
-                               category=PyGTKDeprecationWarning)
+
+    def __init__(self, model=None):
+        Gtk.TreeView.__init__(self)
+        if model:
+            self.set_model(model)
 
     get_path_at_pos = strip_boolean_result(Gtk.TreeView.get_path_at_pos)
     get_visible_range = strip_boolean_result(Gtk.TreeView.get_visible_range)
@@ -1378,79 +1335,66 @@ __all__.append('TreeSelection')
 
 
 class Button(Gtk.Button, Container):
-    _init = deprecated_init(Gtk.Button.__init__,
-                            arg_names=('label', 'stock', 'use_stock', 'use_underline'),
-                            ignore=('stock',),
-                            category=PyGTKDeprecationWarning,
-                            stacklevel=3)
-
-    def __init__(self, *args, **kwargs):
-        # Doubly deprecated initializer, the stock keyword is non-standard.
-        # Simply give a warning that stock items are deprecated even though
-        # we want to deprecate the non-standard keyword as well here from
-        # the overrides.
-        if 'stock' in kwargs and kwargs['stock']:
-            warnings.warn('Stock items are deprecated. '
-                          'Please use: Gtk.Button.new_with_mnemonic(label)',
-                          PyGTKDeprecationWarning, stacklevel=2)
-            new_kwargs = kwargs.copy()
-            new_kwargs['label'] = new_kwargs['stock']
-            new_kwargs['use_stock'] = True
-            new_kwargs['use_underline'] = True
-            del new_kwargs['stock']
-            Gtk.Button.__init__(self, **new_kwargs)
-        else:
-            self._init(*args, **kwargs)
-
+    def __init__(self, label=None, stock=None, use_stock=False, use_underline=False, **kwds):
+        if stock:
+            label = stock
+            use_stock = True
+            use_underline = True
+        Gtk.Button.__init__(self, label=label, use_stock=use_stock,
+                            use_underline=use_underline, **kwds)
 Button = override(Button)
 __all__.append('Button')
 
 
 class LinkButton(Gtk.LinkButton):
-    __init__ = deprecated_init(Gtk.LinkButton.__init__,
-                               arg_names=('uri', 'label'),
-                               category=PyGTKDeprecationWarning)
+    def __init__(self, uri, label=None, **kwds):
+        Gtk.LinkButton.__init__(self, uri=uri, label=label, **kwds)
 
 LinkButton = override(LinkButton)
 __all__.append('LinkButton')
 
 
 class Label(Gtk.Label):
-    __init__ = deprecated_init(Gtk.Label.__init__,
-                               arg_names=('label',),
-                               category=PyGTKDeprecationWarning)
+    def __init__(self, label=None, **kwds):
+        Gtk.Label.__init__(self, label=label, **kwds)
 
 Label = override(Label)
 __all__.append('Label')
 
 
 class Adjustment(Gtk.Adjustment):
-    _init = deprecated_init(Gtk.Adjustment.__init__,
-                            arg_names=('value', 'lower', 'upper',
-                                       'step_increment', 'page_increment', 'page_size'),
-                            deprecated_aliases={'page_increment': 'page_incr',
-                                                'step_increment': 'step_incr'},
-                            category=PyGTKDeprecationWarning,
-                            stacklevel=3)
+    def __init__(self, *args, **kwds):
+        arg_names = ('value', 'lower', 'upper',
+                     'step_increment', 'page_increment', 'page_size')
+        new_args = dict(zip(arg_names, args))
+        new_args.update(kwds)
 
-    def __init__(self, *args, **kwargs):
-        self._init(*args, **kwargs)
+        # PyGTK compatiblity
+        if 'page_incr' in new_args:
+            new_args['page_increment'] = new_args.pop('page_incr')
+        if 'step_incr' in new_args:
+            new_args['step_increment'] = new_args.pop('step_incr')
+        Gtk.Adjustment.__init__(self, **new_args)
 
         # The value property is set between lower and (upper - page_size).
         # Just in case lower, upper or page_size was still 0 when value
         # was set, we set it again here.
-        if 'value' in kwargs:
-            self.set_value(kwargs['value'])
+        if 'value' in new_args:
+            self.set_value(new_args['value'])
 
 Adjustment = override(Adjustment)
 __all__.append('Adjustment')
 
 
 class Table(Gtk.Table, Container):
-    __init__ = deprecated_init(Gtk.Table.__init__,
-                               arg_names=('n_rows', 'n_columns', 'homogeneous'),
-                               deprecated_aliases={'n_rows': 'rows', 'n_columns': 'columns'},
-                               category=PyGTKDeprecationWarning)
+    def __init__(self, rows=1, columns=1, homogeneous=False, **kwds):
+        if 'n_rows' in kwds:
+            rows = kwds.pop('n_rows')
+
+        if 'n_columns' in kwds:
+            columns = kwds.pop('n_columns')
+
+        Gtk.Table.__init__(self, n_rows=rows, n_columns=columns, homogeneous=homogeneous, **kwds)
 
     def attach(self, child, left_attach, right_attach, top_attach, bottom_attach, xoptions=Gtk.AttachOptions.EXPAND | Gtk.AttachOptions.FILL, yoptions=Gtk.AttachOptions.EXPAND | Gtk.AttachOptions.FILL, xpadding=0, ypadding=0):
         Gtk.Table.attach(self, child, left_attach, right_attach, top_attach, bottom_attach, xoptions, yoptions, xpadding, ypadding)
@@ -1460,27 +1404,24 @@ __all__.append('Table')
 
 
 class ScrolledWindow(Gtk.ScrolledWindow):
-    __init__ = deprecated_init(Gtk.ScrolledWindow.__init__,
-                               arg_names=('hadjustment', 'vadjustment'),
-                               category=PyGTKDeprecationWarning)
+    def __init__(self, hadjustment=None, vadjustment=None, **kwds):
+        Gtk.ScrolledWindow.__init__(self, hadjustment=hadjustment, vadjustment=vadjustment, **kwds)
 
 ScrolledWindow = override(ScrolledWindow)
 __all__.append('ScrolledWindow')
 
 
 class HScrollbar(Gtk.HScrollbar):
-    __init__ = deprecated_init(Gtk.HScrollbar.__init__,
-                               arg_names=('adjustment',),
-                               category=PyGTKDeprecationWarning)
+    def __init__(self, adjustment=None, **kwds):
+        Gtk.HScrollbar.__init__(self, adjustment=adjustment, **kwds)
 
 HScrollbar = override(HScrollbar)
 __all__.append('HScrollbar')
 
 
 class VScrollbar(Gtk.VScrollbar):
-    __init__ = deprecated_init(Gtk.VScrollbar.__init__,
-                               arg_names=('adjustment',),
-                               category=PyGTKDeprecationWarning)
+    def __init__(self, adjustment=None, **kwds):
+        Gtk.VScrollbar.__init__(self, adjustment=adjustment, **kwds)
 
 VScrollbar = override(VScrollbar)
 __all__.append('VScrollbar')
@@ -1498,9 +1439,10 @@ __all__.append('Paned')
 
 
 class Arrow(Gtk.Arrow):
-    __init__ = deprecated_init(Gtk.Arrow.__init__,
-                               arg_names=('arrow_type', 'shadow_type'),
-                               category=PyGTKDeprecationWarning)
+    def __init__(self, arrow_type, shadow_type, **kwds):
+        Gtk.Arrow.__init__(self, arrow_type=arrow_type,
+                           shadow_type=shadow_type,
+                           **kwds)
 
 Arrow = override(Arrow)
 __all__.append('Arrow')
@@ -1509,25 +1451,20 @@ __all__.append('Arrow')
 class IconSet(Gtk.IconSet):
     def __new__(cls, pixbuf=None):
         if pixbuf is not None:
-            warnings.warn('Gtk.IconSet(pixbuf) has been deprecated. Please use: '
-                          'Gtk.IconSet.new_from_pixbuf(pixbuf)',
-                          PyGTKDeprecationWarning, stacklevel=2)
             iconset = Gtk.IconSet.new_from_pixbuf(pixbuf)
         else:
             iconset = Gtk.IconSet.__new__(cls)
         return iconset
-
-    def __init__(self, *args, **kwargs):
-        return super(IconSet, self).__init__()
 
 IconSet = override(IconSet)
 __all__.append('IconSet')
 
 
 class Viewport(Gtk.Viewport):
-    __init__ = deprecated_init(Gtk.Viewport.__init__,
-                               arg_names=('hadjustment', 'vadjustment'),
-                               category=PyGTKDeprecationWarning)
+    def __init__(self, hadjustment=None, vadjustment=None, **kwds):
+        Gtk.Viewport.__init__(self, hadjustment=hadjustment,
+                              vadjustment=vadjustment,
+                              **kwds)
 
 Viewport = override(Viewport)
 __all__.append('Viewport')

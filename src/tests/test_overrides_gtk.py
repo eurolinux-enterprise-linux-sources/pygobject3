@@ -6,25 +6,18 @@ import contextlib
 import unittest
 import time
 import sys
-import warnings
 
 from compathelper import _unicode, _bytes
-from helper import ignore_gi_deprecation_warnings, capture_glib_warnings
 
-import gi
 import gi.overrides
 import gi.types
 from gi.repository import GLib, GObject
 
 try:
-    gi.require_version('Gtk', '3.0')
-    gi.require_version('GdkPixbuf', '2.0')
-    from gi.repository import Gtk, GdkPixbuf, Gdk
+    from gi.repository import GdkPixbuf, Gdk, Gtk
     Gtk  # pyflakes
-    PyGTKDeprecationWarning = Gtk.PyGTKDeprecationWarning
-except (ValueError, ImportError):
+except ImportError:
     Gtk = None
-    PyGTKDeprecationWarning = None
 
 
 @contextlib.contextmanager
@@ -60,7 +53,6 @@ def realized(widget):
 
 
 @unittest.skipUnless(Gtk, 'Gtk not available')
-@ignore_gi_deprecation_warnings
 class TestGtk(unittest.TestCase):
     def test_container(self):
         box = Gtk.Box()
@@ -81,14 +73,16 @@ class TestGtk(unittest.TestCase):
 
     def test_actions(self):
         self.assertEqual(Gtk.Action, gi.overrides.Gtk.Action)
-        action = Gtk.Action(name="test", label="Test", tooltip="Test Action", stock_id=Gtk.STOCK_COPY)
+        self.assertRaises(TypeError, Gtk.Action)
+        action = Gtk.Action("test", "Test", "Test Action", Gtk.STOCK_COPY)
         self.assertEqual(action.get_name(), "test")
         self.assertEqual(action.get_label(), "Test")
         self.assertEqual(action.get_tooltip(), "Test Action")
         self.assertEqual(action.get_stock_id(), Gtk.STOCK_COPY)
 
         self.assertEqual(Gtk.RadioAction, gi.overrides.Gtk.RadioAction)
-        action = Gtk.RadioAction(name="test", label="Test", tooltip="Test Action", stock_id=Gtk.STOCK_COPY, value=1)
+        self.assertRaises(TypeError, Gtk.RadioAction)
+        action = Gtk.RadioAction("test", "Test", "Test Action", Gtk.STOCK_COPY, 1)
         self.assertEqual(action.get_name(), "test")
         self.assertEqual(action.get_label(), "Test")
         self.assertEqual(action.get_tooltip(), "Test Action")
@@ -97,6 +91,7 @@ class TestGtk(unittest.TestCase):
 
     def test_actiongroup(self):
         self.assertEqual(Gtk.ActionGroup, gi.overrides.Gtk.ActionGroup)
+        self.assertRaises(TypeError, Gtk.ActionGroup)
 
         action_group = Gtk.ActionGroup(name='TestActionGroup')
         callback_data = "callback data"
@@ -161,6 +156,73 @@ class TestGtk(unittest.TestCase):
         mi = ui.get_widget("/menubær1")
         self.assertEqual(type(mi), Gtk.MenuBar)
 
+    def test_builder(self):
+        self.assertEqual(Gtk.Builder, gi.overrides.Gtk.Builder)
+
+        class SignalTest(GObject.GObject):
+            __gtype_name__ = "GIOverrideSignalTest"
+            __gsignals__ = {
+                "test-signal": (GObject.SignalFlags.RUN_FIRST,
+                                None,
+                                []),
+            }
+
+        class SignalCheck:
+            def __init__(self):
+                self.sentinel = 0
+                self.after_sentinel = 0
+
+            def on_signal_1(self, *args):
+                self.sentinel += 1
+                self.after_sentinel += 1
+
+            def on_signal_3(self, *args):
+                self.sentinel += 3
+
+            def on_signal_after(self, *args):
+                if self.after_sentinel == 1:
+                    self.after_sentinel += 1
+
+        signal_checker = SignalCheck()
+        builder = Gtk.Builder()
+
+        # add object1 to the builder
+        builder.add_from_string("""
+<interface>
+  <object class="GIOverrideSignalTest" id="object1">
+      <signal name="test-signal" after="yes" handler="on_signal_after" />
+      <signal name="test-signal" handler="on_signal_1" />
+  </object>
+</interface>
+""")
+
+        # only add object3 to the builder
+        builder.add_objects_from_string("""
+<interface>
+  <object class="GIOverrideSignalTest" id="object2">
+      <signal name="test-signal" handler="on_signal_2" />
+  </object>
+  <object class="GIOverrideSignalTest" id="object3">
+      <signal name="test-signal" handler="on_signal_3" />
+  </object>
+  <object class="GIOverrideSignalTest" id="object4">
+      <signal name="test-signal" handler="on_signal_4" />
+  </object>
+</interface>
+""", ['object3'])
+
+        # hook up signals
+        builder.connect_signals(signal_checker)
+
+        # call their notify signals and check sentinel
+        objects = builder.get_objects()
+        self.assertEqual(len(objects), 2)
+        for obj in objects:
+            obj.emit('test-signal')
+
+        self.assertEqual(signal_checker.sentinel, 4)
+        self.assertEqual(signal_checker.after_sentinel, 2)
+
     def test_window(self):
         # standard Window
         w = Gtk.Window()
@@ -168,6 +230,10 @@ class TestGtk(unittest.TestCase):
 
         # type works as keyword argument
         w = Gtk.Window(type=Gtk.WindowType.POPUP)
+        self.assertEqual(w.get_property('type'), Gtk.WindowType.POPUP)
+
+        # pygtk compatible positional argument
+        w = Gtk.Window(Gtk.WindowType.POPUP)
         self.assertEqual(w.get_property('type'), Gtk.WindowType.POPUP)
 
         class TestWindow(Gtk.Window):
@@ -193,80 +259,26 @@ class TestGtk(unittest.TestCase):
         self.assertEqual(builder.get_object('testpop').get_property('type'),
                          Gtk.WindowType.POPUP)
 
-    def test_dialog_classes(self):
+    def test_dialogs(self):
         self.assertEqual(Gtk.Dialog, gi.overrides.Gtk.Dialog)
+        self.assertEqual(Gtk.AboutDialog, gi.overrides.Gtk.AboutDialog)
+        self.assertEqual(Gtk.MessageDialog, gi.overrides.Gtk.MessageDialog)
         self.assertEqual(Gtk.ColorSelectionDialog, gi.overrides.Gtk.ColorSelectionDialog)
         self.assertEqual(Gtk.FileChooserDialog, gi.overrides.Gtk.FileChooserDialog)
         self.assertEqual(Gtk.FontSelectionDialog, gi.overrides.Gtk.FontSelectionDialog)
         self.assertEqual(Gtk.RecentChooserDialog, gi.overrides.Gtk.RecentChooserDialog)
 
-    def test_dialog_base(self):
-        dialog = Gtk.Dialog(title='Foo', modal=True)
+        # Gtk.Dialog
+        dialog = Gtk.Dialog(title='Foo',
+                            flags=Gtk.DialogFlags.MODAL,
+                            buttons=('test-button1', 1))
         self.assertTrue(isinstance(dialog, Gtk.Dialog))
         self.assertTrue(isinstance(dialog, Gtk.Window))
-        self.assertEqual('Foo', dialog.get_title())
-        self.assertTrue(dialog.get_modal())
-
-    def test_dialog_deprecations(self):
-        with warnings.catch_warnings(record=True) as warn:
-            warnings.simplefilter('always')
-            dialog = Gtk.Dialog(title='Foo', flags=Gtk.DialogFlags.MODAL)
-            self.assertTrue(dialog.get_modal())
-            self.assertEqual(len(warn), 1)
-            self.assertTrue(issubclass(warn[0].category, PyGTKDeprecationWarning))
-            self.assertRegexpMatches(str(warn[0].message),
-                                     '.*flags.*modal.*')
-
-        with warnings.catch_warnings(record=True) as warn:
-            warnings.simplefilter('always')
-            dialog = Gtk.Dialog(title='Foo', flags=Gtk.DialogFlags.DESTROY_WITH_PARENT)
-            self.assertTrue(dialog.get_destroy_with_parent())
-            self.assertEqual(len(warn), 1)
-            self.assertTrue(issubclass(warn[0].category, PyGTKDeprecationWarning))
-            self.assertRegexpMatches(str(warn[0].message),
-                                     '.*flags.*destroy_with_parent.*')
-
-    def test_dialog_deprecation_stacklevels(self):
-        # Test warning levels are setup to give the correct filename for
-        # deprecations in different classes in the inheritance hierarchy.
-
-        # Base class
-        self.assertEqual(Gtk.Dialog, gi.overrides.Gtk.Dialog)
-        with warnings.catch_warnings(record=True) as warn:
-            warnings.simplefilter('always')
-            Gtk.Dialog(flags=Gtk.DialogFlags.MODAL)
-            self.assertEqual(len(warn), 1)
-            self.assertRegexpMatches(warn[0].filename, '.*test_overrides_gtk.*')
-
-        # Validate overridden base with overridden sub-class.
-        self.assertEqual(Gtk.MessageDialog, gi.overrides.Gtk.MessageDialog)
-        with warnings.catch_warnings(record=True) as warn:
-            warnings.simplefilter('always')
-            Gtk.MessageDialog(flags=Gtk.DialogFlags.MODAL)
-            self.assertEqual(len(warn), 1)
-            self.assertRegexpMatches(warn[0].filename, '.*test_overrides_gtk.*')
-
-        # Validate overridden base with non-overridden sub-class.
-        self.assertEqual(Gtk.AboutDialog, gi.repository.Gtk.AboutDialog)
-        with warnings.catch_warnings(record=True) as warn:
-            warnings.simplefilter('always')
-            Gtk.AboutDialog(flags=Gtk.DialogFlags.MODAL)
-            self.assertEqual(len(warn), 1)
-            self.assertRegexpMatches(warn[0].filename, '.*test_overrides_gtk.*')
-
-    def test_dialog_add_buttons(self):
-        # The overloaded "buttons" keyword gives a warning when attempting
-        # to use it for adding buttons as was available in PyGTK.
-        with warnings.catch_warnings(record=True) as warn:
-            warnings.simplefilter('always')
-            dialog = Gtk.Dialog(title='Foo', modal=True,
-                                buttons=('test-button1', 1))
-            self.assertEqual(len(warn), 1)
-            self.assertTrue(issubclass(warn[0].category, PyGTKDeprecationWarning))
-            self.assertRegexpMatches(str(warn[0].message),
-                                     '.*ButtonsType.*add_buttons.*')
 
         dialog.add_buttons('test-button2', 2, Gtk.STOCK_CLOSE, Gtk.ResponseType.CLOSE)
+
+        self.assertEqual('Foo', dialog.get_title())
+        self.assertTrue(dialog.get_modal())
         button = dialog.get_widget_for_response(1)
         self.assertEqual('test-button1', button.get_label())
         button = dialog.get_widget_for_response(2)
@@ -274,20 +286,16 @@ class TestGtk(unittest.TestCase):
         button = dialog.get_widget_for_response(Gtk.ResponseType.CLOSE)
         self.assertEqual(Gtk.STOCK_CLOSE, button.get_label())
 
-    def test_about_dialog(self):
+        # Gtk.AboutDialog
         dialog = Gtk.AboutDialog()
         self.assertTrue(isinstance(dialog, Gtk.Dialog))
         self.assertTrue(isinstance(dialog, Gtk.Window))
 
-        # AboutDialog is not sub-classed in overrides, make sure
-        # the mro still injects the base class "add_buttons" override.
-        self.assertTrue(hasattr(dialog, 'add_buttons'))
-
-    def test_message_dialog(self):
+        # Gtk.MessageDialog
         dialog = Gtk.MessageDialog(title='message dialog test',
-                                   modal=True,
+                                   flags=Gtk.DialogFlags.MODAL,
                                    buttons=Gtk.ButtonsType.OK,
-                                   text='dude!')
+                                   message_format='dude!')
         self.assertTrue(isinstance(dialog, Gtk.Dialog))
         self.assertTrue(isinstance(dialog, Gtk.Window))
 
@@ -304,46 +312,58 @@ class TestGtk(unittest.TestCase):
         self.assertEqual(dialog.get_property('secondary-text'), '2nd markup')
         self.assertTrue(dialog.get_property('secondary-use-markup'))
 
-    def test_color_selection_dialog(self):
-        dialog = Gtk.ColorSelectionDialog(title="color selection dialog test")
+        # Gtk.ColorSelectionDialog
+        dialog = Gtk.ColorSelectionDialog("color selection dialog test")
         self.assertTrue(isinstance(dialog, Gtk.Dialog))
         self.assertTrue(isinstance(dialog, Gtk.Window))
         self.assertEqual('color selection dialog test', dialog.get_title())
 
-    def test_file_chooser_dialog(self):
+        # Gtk.FileChooserDialog
         # might cause a GVFS warning, do not break on this
-        with capture_glib_warnings(allow_warnings=True):
+        old_mask = GLib.log_set_always_fatal(
+            GLib.LogLevelFlags.LEVEL_CRITICAL | GLib.LogLevelFlags.LEVEL_ERROR)
+        try:
             dialog = Gtk.FileChooserDialog(title='file chooser dialog test',
+                                           buttons=('test-button1', 1),
                                            action=Gtk.FileChooserAction.SAVE)
-
+        finally:
+            GLib.log_set_always_fatal(old_mask)
         self.assertTrue(isinstance(dialog, Gtk.Dialog))
         self.assertTrue(isinstance(dialog, Gtk.Window))
-        self.assertEqual('file chooser dialog test', dialog.get_title())
 
+        dialog.add_buttons('test-button2', 2, Gtk.STOCK_CLOSE, Gtk.ResponseType.CLOSE)
+        self.assertEqual('file chooser dialog test', dialog.get_title())
+        button = dialog.get_widget_for_response(1)
+        self.assertEqual('test-button1', button.get_label())
+        button = dialog.get_widget_for_response(2)
+        self.assertEqual('test-button2', button.get_label())
+        button = dialog.get_widget_for_response(Gtk.ResponseType.CLOSE)
+        self.assertEqual(Gtk.STOCK_CLOSE, button.get_label())
         action = dialog.get_property('action')
         self.assertEqual(Gtk.FileChooserAction.SAVE, action)
 
-    def test_file_chooser_dialog_default_action(self):
-        # might cause a GVFS warning, do not break on this
-        with capture_glib_warnings(allow_warnings=True):
-            dialog = Gtk.FileChooserDialog(title='file chooser dialog test')
-
-        action = dialog.get_property('action')
-        self.assertEqual(Gtk.FileChooserAction.OPEN, action)
-
-    def test_font_selection_dialog(self):
-        dialog = Gtk.FontSelectionDialog(title="font selection dialog test")
+        # Gtk.FontSelectionDialog
+        dialog = Gtk.ColorSelectionDialog("font selection dialog test")
         self.assertTrue(isinstance(dialog, Gtk.Dialog))
         self.assertTrue(isinstance(dialog, Gtk.Window))
         self.assertEqual('font selection dialog test', dialog.get_title())
 
-    def test_recent_chooser_dialog(self):
+        # Gtk.RecentChooserDialog
         test_manager = Gtk.RecentManager()
         dialog = Gtk.RecentChooserDialog(title='recent chooser dialog test',
-                                         recent_manager=test_manager)
+                                         buttons=('test-button1', 1),
+                                         manager=test_manager)
         self.assertTrue(isinstance(dialog, Gtk.Dialog))
         self.assertTrue(isinstance(dialog, Gtk.Window))
+
+        dialog.add_buttons('test-button2', 2, Gtk.STOCK_CLOSE, Gtk.ResponseType.CLOSE)
         self.assertEqual('recent chooser dialog test', dialog.get_title())
+        button = dialog.get_widget_for_response(1)
+        self.assertEqual('test-button1', button.get_label())
+        button = dialog.get_widget_for_response(2)
+        self.assertEqual('test-button2', button.get_label())
+        button = dialog.get_widget_for_response(Gtk.ResponseType.CLOSE)
+        self.assertEqual(Gtk.STOCK_CLOSE, button.get_label())
 
     class TestClass(GObject.GObject):
         __gtype_name__ = "GIOverrideTreeAPITest"
@@ -366,11 +386,7 @@ class TestGtk(unittest.TestCase):
         self.assertTrue(isinstance(button, Gtk.Button))
         self.assertTrue(isinstance(button, Gtk.Container))
         self.assertTrue(isinstance(button, Gtk.Widget))
-
-        # Using stock items causes hard warning in devel versions of GTK+.
-        with capture_glib_warnings(allow_warnings=True):
-            button = Gtk.Button.new_from_stock(Gtk.STOCK_CLOSE)
-
+        button = Gtk.Button(stock=Gtk.STOCK_CLOSE)
         self.assertEqual(Gtk.STOCK_CLOSE, button.get_label())
         self.assertTrue(button.get_use_stock())
         self.assertTrue(button.get_use_underline())
@@ -382,7 +398,8 @@ class TestGtk(unittest.TestCase):
         self.assertTrue(button.get_use_underline())
 
         # test Gtk.LinkButton
-        button = Gtk.LinkButton(uri='http://www.Gtk.org', label='Gtk')
+        self.assertRaises(TypeError, Gtk.LinkButton)
+        button = Gtk.LinkButton('http://www.Gtk.org', 'Gtk')
         self.assertTrue(isinstance(button, Gtk.Button))
         self.assertTrue(isinstance(button, Gtk.Container))
         self.assertTrue(isinstance(button, Gtk.Widget))
@@ -442,20 +459,24 @@ class TestGtk(unittest.TestCase):
         self.assertEqual(adjustment.get_page_size(), page_size)
 
     def test_adjustment(self):
-        adjustment = Gtk.Adjustment(value=1, lower=0, upper=6, step_increment=4, page_increment=5, page_size=3)
-        self.adjustment_check(adjustment, value=1, lower=0, upper=6, step_increment=4, page_increment=5, page_size=3)
+        adjustment = Gtk.Adjustment(1, 0, 6, 4, 5, 3)
+        self.adjustment_check(adjustment, 1, 0, 6, 4, 5, 3)
 
-        adjustment = Gtk.Adjustment(value=1, lower=0, upper=6, step_increment=4, page_increment=5)
-        self.adjustment_check(adjustment, value=1, lower=0, upper=6, step_increment=4, page_increment=5)
+        adjustment = Gtk.Adjustment(1, 0, 6, 4, 5)
+        self.adjustment_check(adjustment, 1, 0, 6, 4, 5)
 
-        adjustment = Gtk.Adjustment(value=1, lower=0, upper=6, step_increment=4)
-        self.adjustment_check(adjustment, value=1, lower=0, upper=6, step_increment=4)
+        adjustment = Gtk.Adjustment(1, 0, 6, 4)
+        self.adjustment_check(adjustment, 1, 0, 6, 4)
 
-        adjustment = Gtk.Adjustment(value=1, lower=0, upper=6)
-        self.adjustment_check(adjustment, value=1, lower=0, upper=6)
+        adjustment = Gtk.Adjustment(1, 0, 6)
+        self.adjustment_check(adjustment, 1, 0, 6)
 
         adjustment = Gtk.Adjustment()
         self.adjustment_check(adjustment)
+
+        adjustment = Gtk.Adjustment(value=1, lower=0, upper=6,
+                                    step_increment=4, page_increment=5, page_size=3)
+        self.adjustment_check(adjustment, 1, 0, 6, 4, 5, 3)
 
     def test_table(self):
         table = Gtk.Table()
@@ -464,11 +485,17 @@ class TestGtk(unittest.TestCase):
         self.assertTrue(isinstance(table, Gtk.Widget))
         self.assertEqual(table.get_size(), (1, 1))
         self.assertEqual(table.get_homogeneous(), False)
-
-        table = Gtk.Table(n_rows=2, n_columns=3)
+        table = Gtk.Table(2, 3)
         self.assertEqual(table.get_size(), (2, 3))
         self.assertEqual(table.get_homogeneous(), False)
+        table = Gtk.Table(2, 3, True)
+        self.assertEqual(table.get_size(), (2, 3))
+        self.assertEqual(table.get_homogeneous(), True)
 
+        # Test PyGTK interface
+        table = Gtk.Table(rows=3, columns=2)
+        self.assertEqual(table.get_size(), (3, 2))
+        # Test using the actual property names
         table = Gtk.Table(n_rows=2, n_columns=3, homogeneous=True)
         self.assertEqual(table.get_size(), (2, 3))
         self.assertEqual(table.get_homogeneous(), True)
@@ -504,7 +531,6 @@ class TestGtk(unittest.TestCase):
         widget.drag_dest_get_track_motion()
         widget.drag_dest_set_track_motion(True)
         widget.drag_dest_get_target_list()
-        widget.drag_dest_set_target_list(None)
         widget.drag_dest_set_target_list(Gtk.TargetList.new([Gtk.TargetEntry.new('test', 0, 0)]))
         widget.drag_dest_unset()
 
@@ -516,18 +542,17 @@ class TestGtk(unittest.TestCase):
         widget.drag_source_add_image_targets()
         widget.drag_source_add_text_targets()
         widget.drag_source_add_uri_targets()
-        widget.drag_source_set_icon_name("_About")
+        widget.drag_source_set_icon_name("")
         widget.drag_source_set_icon_pixbuf(GdkPixbuf.Pixbuf())
-        widget.drag_source_set_icon_stock(Gtk.STOCK_ABOUT)
+        widget.drag_source_set_icon_stock("")
         widget.drag_source_get_target_list()
-        widget.drag_source_set_target_list(None)
         widget.drag_source_set_target_list(Gtk.TargetList.new([Gtk.TargetEntry.new('test', 0, 0)]))
         widget.drag_source_unset()
 
         # these methods cannot be called because they require a valid drag on
         # a real GdkWindow. So we only check that they exist and are callable.
-        self.assertTrue(hasattr(widget, 'drag_dest_set_proxy'))
-        self.assertTrue(hasattr(widget, 'drag_get_data'))
+        self.assertTrue(hasattr(widget.drag_dest_set_proxy, '__call__'))
+        self.assertTrue(hasattr(widget.drag_get_data, '__call__'))
 
     def test_drag_target_list(self):
         mixed_target_list = [Gtk.TargetEntry.new('test0', 0, 0),
@@ -562,6 +587,7 @@ class TestGtk(unittest.TestCase):
                                         Gdk.DragAction.DEFAULT | Gdk.DragAction.MOVE)
 
     def test_scrollbar(self):
+        # PyGTK compat
         adjustment = Gtk.Adjustment()
 
         hscrollbar = Gtk.HScrollbar()
@@ -569,8 +595,8 @@ class TestGtk(unittest.TestCase):
         self.assertNotEqual(hscrollbar.props.adjustment, adjustment)
         self.assertNotEqual(vscrollbar.props.adjustment, adjustment)
 
-        hscrollbar = Gtk.HScrollbar(adjustment=adjustment)
-        vscrollbar = Gtk.VScrollbar(adjustment=adjustment)
+        hscrollbar = Gtk.HScrollbar(adjustment)
+        vscrollbar = Gtk.VScrollbar(adjustment)
         self.assertEqual(hscrollbar.props.adjustment, adjustment)
         self.assertEqual(vscrollbar.props.adjustment, adjustment)
 
@@ -580,31 +606,31 @@ class TestGtk(unittest.TestCase):
         self.assertEqual(iconview.props.model, None)
 
         model = Gtk.ListStore(str)
-        iconview = Gtk.IconView(model=model)
+        iconview = Gtk.IconView(model)
         self.assertEqual(iconview.props.model, model)
 
     def test_toolbutton(self):
         # PyGTK compat
+        button = Gtk.ToolButton()
+        self.assertEqual(button.props.stock_id, None)
 
-        # Using stock items causes hard warning in devel versions of GTK+.
-        with capture_glib_warnings(allow_warnings=True):
-            button = Gtk.ToolButton()
-            self.assertEqual(button.props.stock_id, None)
-
-            button = Gtk.ToolButton(stock_id='gtk-new')
-            self.assertEqual(button.props.stock_id, 'gtk-new')
+        button = Gtk.ToolButton('gtk-new')
+        self.assertEqual(button.props.stock_id, 'gtk-new')
 
         icon = Gtk.Image.new_from_stock(Gtk.STOCK_OPEN, Gtk.IconSize.SMALL_TOOLBAR)
+
         button = Gtk.ToolButton(label='mylabel', icon_widget=icon)
         self.assertEqual(button.props.label, 'mylabel')
         self.assertEqual(button.props.icon_widget, icon)
 
     def test_iconset(self):
+        # PyGTK compat
         Gtk.IconSet()
         pixbuf = GdkPixbuf.Pixbuf()
-        Gtk.IconSet.new_from_pixbuf(pixbuf)
+        Gtk.IconSet(pixbuf)
 
     def test_viewport(self):
+        # PyGTK compat
         vadjustment = Gtk.Adjustment()
         hadjustment = Gtk.Adjustment()
 
@@ -629,236 +655,14 @@ class TestGtk(unittest.TestCase):
         GLib.timeout_add(100, Gtk.main_quit, 'hello')
         Gtk.main()
 
-    def test_widget_render_icon(self):
-        button = Gtk.Button(label='OK')
-        pixbuf = button.render_icon(Gtk.STOCK_OK, Gtk.IconSize.BUTTON)
-        self.assertTrue(pixbuf is not None)
 
-
-@unittest.skipUnless(Gtk, 'Gtk not available')
-class TestWidget(unittest.TestCase):
-    def test_style_get_property_gvalue(self):
-        button = Gtk.Button()
-        value = GObject.Value(int, -42)
-        button.style_get_property('focus-padding', value)
-        # Test only that the style property changed since we can't actuall
-        # set it.
-        self.assertNotEqual(value.get_int(), -42)
-
-    def test_style_get_property_return_with_explicit_gvalue(self):
-        button = Gtk.Button()
-        value = GObject.Value(int, -42)
-        result = button.style_get_property('focus-padding', value)
-        self.assertIsInstance(result, int)
-        self.assertNotEqual(result, -42)
-
-    def test_style_get_property_return_with_implicit_gvalue(self):
-        button = Gtk.Button()
-        result = button.style_get_property('focus-padding')
-        self.assertIsInstance(result, int)
-        self.assertNotEqual(result, -42)
-
-    def test_style_get_property_error(self):
-        button = Gtk.Button()
-        with self.assertRaises(ValueError):
-            button.style_get_property('not-a-valid-style-property')
-
-
-@unittest.skipUnless(Gtk, 'Gtk not available')
-class TestSignals(unittest.TestCase):
-    def test_class_closure_override_with_aliased_type(self):
-        class WindowWithSizeAllocOverride(Gtk.ScrolledWindow):
-            __gsignals__ = {'size-allocate': 'override'}
-
-            def __init__(self):
-                Gtk.ScrolledWindow.__init__(self)
-                self._alloc_called = False
-                self._alloc_value = None
-                self._alloc_error = None
-
-            def do_size_allocate(self, alloc):
-                self._alloc_called = True
-                self._alloc_value = alloc
-
-                try:
-                    Gtk.ScrolledWindow.do_size_allocate(self, alloc)
-                except Exception as e:
-                    self._alloc_error = e
-
-        win = WindowWithSizeAllocOverride()
-        rect = Gdk.Rectangle()
-        rect.width = 100
-        rect.height = 100
-
-        with realized(win):
-            win.show()
-            win.get_preferred_size()
-            win.size_allocate(rect)
-            self.assertTrue(win._alloc_called)
-            self.assertIsInstance(win._alloc_value, Gdk.Rectangle)
-            self.assertTrue(win._alloc_error is None, win._alloc_error)
-
-    @unittest.expectedFailure  # https://bugzilla.gnome.org/show_bug.cgi?id=735693
-    def test_overlay_child_position(self):
-        def get_child_position(overlay, widget, rect, user_data=None):
-            rect.x = 1
-            rect.y = 2
-            rect.width = 3
-            rect.height = 4
-            return True
-
-        overlay = Gtk.Overlay()
-        overlay.connect('get-child-position', get_child_position)
-
-        rect = Gdk.Rectangle()
-        rect.x = -1
-        rect.y = -1
-        rect.width = -1
-        rect.height = -1
-
-        overlay.emit('get-child-position', None, rect)
-        self.assertEqual(rect.x, 1)
-        self.assertEqual(rect.y, 2)
-        self.assertEqual(rect.width, 3)
-        self.assertEqual(rect.height, 4)
-
-
-@unittest.skipUnless(Gtk, 'Gtk not available')
-class TestBuilder(unittest.TestCase):
-    class SignalTest(GObject.GObject):
-        __gtype_name__ = "GIOverrideSignalTest"
-        __gsignals__ = {
-            "test-signal": (GObject.SignalFlags.RUN_FIRST,
-                            None,
-                            []),
-        }
-
-    def test_extract_handler_and_args_object(self):
-        class Obj():
-            pass
-
-        obj = Obj()
-        obj.foo = lambda: None
-
-        handler, args = Gtk._extract_handler_and_args(obj, 'foo')
-        self.assertEqual(handler, obj.foo)
-        self.assertEqual(len(args), 0)
-
-    def test_extract_handler_and_args_dict(self):
-        obj = {'foo': lambda: None}
-
-        handler, args = Gtk._extract_handler_and_args(obj, 'foo')
-        self.assertEqual(handler, obj['foo'])
-        self.assertEqual(len(args), 0)
-
-    def test_extract_handler_and_args_with_seq(self):
-        obj = {'foo': (lambda: None, 1, 2)}
-
-        handler, args = Gtk._extract_handler_and_args(obj, 'foo')
-        self.assertEqual(handler, obj['foo'][0])
-        self.assertSequenceEqual(args, [1, 2])
-
-    def test_extract_handler_and_args_no_handler_error(self):
-        obj = dict(foo=lambda: None)
-        self.assertRaises(AttributeError,
-                          Gtk._extract_handler_and_args,
-                          obj, 'not_a_handler')
-
-    def test_builder_with_handler_and_args(self):
-        builder = Gtk.Builder()
-        builder.add_from_string("""
-            <interface>
-              <object class="GIOverrideSignalTest" id="object_sig_test">
-                  <signal name="test-signal" handler="on_signal1" />
-                  <signal name="test-signal" handler="on_signal2" after="yes" />
-              </object>
-            </interface>
-            """)
-
-        args_collector = []
-
-        def on_signal(*args):
-            args_collector.append(args)
-
-        builder.connect_signals({'on_signal1': (on_signal, 1, 2),
-                                 'on_signal2': on_signal})
-
-        objects = builder.get_objects()
-        self.assertEqual(len(objects), 1)
-        obj, = objects
-        obj.emit('test-signal')
-
-        self.assertEqual(len(args_collector), 2)
-        self.assertSequenceEqual(args_collector[0], (obj, 1, 2))
-        self.assertSequenceEqual(args_collector[1], (obj, ))
-
-    def test_builder(self):
-        self.assertEqual(Gtk.Builder, gi.overrides.Gtk.Builder)
-
-        class SignalCheck:
-            def __init__(self):
-                self.sentinel = 0
-                self.after_sentinel = 0
-
-            def on_signal_1(self, *args):
-                self.sentinel += 1
-                self.after_sentinel += 1
-
-            def on_signal_3(self, *args):
-                self.sentinel += 3
-
-            def on_signal_after(self, *args):
-                if self.after_sentinel == 1:
-                    self.after_sentinel += 1
-
-        signal_checker = SignalCheck()
-        builder = Gtk.Builder()
-
-        # add object1 to the builder
-        builder.add_from_string("""
-<interface>
-  <object class="GIOverrideSignalTest" id="object1">
-      <signal name="test-signal" after="yes" handler="on_signal_after" />
-      <signal name="test-signal" handler="on_signal_1" />
-  </object>
-</interface>
-""")
-
-        # only add object3 to the builder
-        builder.add_objects_from_string("""
-<interface>
-  <object class="GIOverrideSignalTest" id="object2">
-      <signal name="test-signal" handler="on_signal_2" />
-  </object>
-  <object class="GIOverrideSignalTest" id="object3">
-      <signal name="test-signal" handler="on_signal_3" />
-  </object>
-  <object class="GIOverrideSignalTest" id="object4">
-      <signal name="test-signal" handler="on_signal_4" />
-  </object>
-</interface>
-""", ['object3'])
-
-        # hook up signals
-        builder.connect_signals(signal_checker)
-
-        # call their notify signals and check sentinel
-        objects = builder.get_objects()
-        self.assertEqual(len(objects), 2)
-        for obj in objects:
-            obj.emit('test-signal')
-
-        self.assertEqual(signal_checker.sentinel, 4)
-        self.assertEqual(signal_checker.after_sentinel, 2)
-
-
-@ignore_gi_deprecation_warnings
 @unittest.skipUnless(Gtk, 'Gtk not available')
 class TestTreeModel(unittest.TestCase):
     def test_tree_model_sort(self):
         self.assertEqual(Gtk.TreeModelSort, gi.overrides.Gtk.TreeModelSort)
+        self.assertRaises(TypeError, Gtk.TreeModelSort)
         model = Gtk.TreeStore(int, bool)
-        model_sort = Gtk.TreeModelSort(model=model)
+        model_sort = Gtk.TreeModelSort(model)
         self.assertEqual(model_sort.get_model(), model)
 
     def test_tree_store(self):
@@ -903,8 +707,8 @@ class TestTreeModel(unittest.TestCase):
                                                 i % 2,
                                                 bool(i % 2),
                                                 i,
-                                                GLib.MAXULONG,
-                                                GLib.MININT64,
+                                                GObject.G_MAXULONG,
+                                                GObject.G_MININT64,
                                                 0xffffffffffffffff,
                                                 254,
                                                 _bytes('a')
@@ -925,8 +729,8 @@ class TestTreeModel(unittest.TestCase):
                        7, i % 2,
                        8, bool(i % 2),
                        9, i,
-                       10, GLib.MAXULONG,
-                       11, GLib.MININT64,
+                       10, GObject.G_MAXULONG,
+                       11, GObject.G_MININT64,
                        12, 0xffffffffffffffff,
                        13, 254,
                        14, _bytes('a'))
@@ -945,8 +749,8 @@ class TestTreeModel(unittest.TestCase):
                                 7: i % 2,
                                 8: bool(i % 2),
                                 9: i,
-                                10: GLib.MAXULONG,
-                                11: GLib.MININT64,
+                                10: GObject.G_MAXULONG,
+                                11: GObject.G_MININT64,
                                 12: 0xffffffffffffffff,
                                 13: 254,
                                 14: _bytes('a')})
@@ -966,8 +770,8 @@ class TestTreeModel(unittest.TestCase):
                                 i % 2,
                                 bool(i % 2),
                                 i,
-                                GLib.MAXULONG,
-                                GLib.MININT64,
+                                GObject.G_MAXULONG,
+                                GObject.G_MININT64,
                                 0xffffffffffffffff,
                                 254,
                                 _bytes('a')))
@@ -1006,9 +810,9 @@ class TestTreeModel(unittest.TestCase):
             uint_ = tree_store.get_value(treeiter, 9)
             self.assertEqual(uint_, i)
             ulong_ = tree_store.get_value(treeiter, 10)
-            self.assertEqual(ulong_, GLib.MAXULONG)
+            self.assertEqual(ulong_, GObject.G_MAXULONG)
             int64_ = tree_store.get_value(treeiter, 11)
-            self.assertEqual(int64_, GLib.MININT64)
+            self.assertEqual(int64_, GObject.G_MININT64)
             uint64_ = tree_store.get_value(treeiter, 12)
             self.assertEqual(uint64_, 0xffffffffffffffff)
             uchar_ = tree_store.get_value(treeiter, 13)
@@ -1587,52 +1391,6 @@ class TestTreeModel(unittest.TestCase):
 
         self.assertRaises(TypeError, set_row3)
 
-    def test_tree_row_sequence(self):
-        model = Gtk.ListStore(int, str, float)
-        model.append([1, "one", -0.1])
-
-        self.assertEqual([1, "one", -0.1], model[0][0, 1, 2])
-        self.assertEqual([1, "one"], model[0][0, 1])
-        self.assertEqual(["one", -0.1], model[0][1, 2])
-        self.assertEqual("one", model[0][1])
-        self.assertEqual([1, -0.1], model[0][0, 2])
-        self.assertEqual([-0.1, 1], model[0][2, 0])
-
-        model[0][0, 1, 2] = (2, "two", -0.2)
-        self.assertEqual([2, "two", -0.2], model[0][0, 1, 2])
-
-        model[0][0, 1] = (3, "three")
-        self.assertEqual([3, "three"], model[0][0, 1])
-
-        model[0][1, 2] = ("four", -0.4)
-        self.assertEqual(["four", -0.4], model[0][1, 2])
-
-        model[0][0, 2] = (5, -0.5)
-        self.assertEqual([5, -0.5], model[0][0, 2])
-
-        model[0][0, 1, 2] = (6, "six", -0.6)
-        self.assertEqual([-0.6, 6, "six"], model[0][2, 0, 1])
-
-        def set_row1():
-            model[0][4, 5] = ("shouldn't", "work",)
-
-        self.assertRaises(IndexError, set_row1)
-
-        def set_row2():
-            model[0][0, 1] = (0, "zero", 0)
-
-        self.assertRaises(ValueError, set_row2)
-
-        def set_row3():
-            model[0][0, 1] = ("shouldn't", 0)
-
-        self.assertRaises(TypeError, set_row3)
-
-        def set_row4():
-            model[0][0, "two"] = (0, "zero")
-
-        self.assertRaises(TypeError, set_row4)
-
     def test_tree_model_set_value_to_none(self):
         # Tests allowing the usage of None to set an empty value on a model.
         store = Gtk.ListStore(str)
@@ -1691,12 +1449,6 @@ class TestTreeModel(unittest.TestCase):
         end = time.clock()
         sys.stderr.write('[%.0f µs/append] ' % ((end - start) * 1000000 / iterations))
 
-    def test_filter_new_default(self):
-        # Test filter_new accepts implicit default of None
-        model = Gtk.ListStore(int)
-        filt = model.filter_new()
-        self.assertTrue(filt is not None)
-
 
 @unittest.skipUnless(Gtk, 'Gtk not available')
 class TestTreeView(unittest.TestCase):
@@ -1715,13 +1467,10 @@ class TestTreeView(unittest.TestCase):
 
     def test_tree_view_column(self):
         cell = Gtk.CellRendererText()
-        col = Gtk.TreeViewColumn(title='This is just a test',
-                                 cell_renderer=cell,
-                                 text=0,
-                                 style=2)
-
-        # Regression test for: https://bugzilla.gnome.org/show_bug.cgi?id=711173
-        col.set_cell_data_func(cell, None, None)
+        Gtk.TreeViewColumn(title='This is just a test',
+                           cell_renderer=cell,
+                           text=0,
+                           style=2)
 
     def test_tree_view_add_column_with_attributes(self):
         model = Gtk.ListStore(str, str, str)
@@ -1730,7 +1479,7 @@ class TestTreeView(unittest.TestCase):
         model.append(['cell13', 'cell11', 'cell12'])
         model.append(['cell23', 'cell21', 'cell22'])
 
-        tree = Gtk.TreeView(model=model)
+        tree = Gtk.TreeView(model)
         cell1 = Gtk.CellRendererText()
         cell2 = Gtk.CellRendererText()
         cell3 = Gtk.CellRendererText()
@@ -1901,84 +1650,3 @@ class TestTextBuffer(unittest.TestCase):
                                         None)
         self.assertEqual(start.get_offset(), 6)
         self.assertEqual(end.get_offset(), 11)
-
-    def test_insert_text_signal_location_modification(self):
-        # Regression test for: https://bugzilla.gnome.org/show_bug.cgi?id=736175
-
-        def callback(buffer, location, text, length):
-            location.assign(buffer.get_end_iter())
-
-        buffer = Gtk.TextBuffer()
-        buffer.set_text('first line\n')
-        buffer.connect('insert-text', callback)
-
-        # attempt insertion at the beginning of the buffer, the callback will
-        # modify the insert location to the end.
-        buffer.place_cursor(buffer.get_start_iter())
-        buffer.insert_at_cursor('second line\n')
-
-        self.assertEqual(buffer.get_property('text'),
-                         'first line\nsecond line\n')
-
-
-@unittest.skipUnless(Gtk, 'Gtk not available')
-class TestContainer(unittest.TestCase):
-    def test_child_set_property(self):
-        box = Gtk.Box()
-        child = Gtk.Button()
-        box.pack_start(child, expand=False, fill=True, padding=0)
-
-        box.child_set_property(child, 'padding', 42)
-
-        value = GObject.Value(int)
-        box.child_get_property(child, 'padding', value)
-        self.assertEqual(value.get_int(), 42)
-
-    def test_child_get_property_gvalue(self):
-        box = Gtk.Box()
-        child = Gtk.Button()
-        box.pack_start(child, expand=False, fill=True, padding=42)
-
-        value = GObject.Value(int)
-        box.child_get_property(child, 'padding', value)
-        self.assertEqual(value.get_int(), 42)
-
-    def test_child_get_property_return_with_explicit_gvalue(self):
-        box = Gtk.Box()
-        child = Gtk.Button()
-        box.pack_start(child, expand=False, fill=True, padding=42)
-
-        value = GObject.Value(int)
-        result = box.child_get_property(child, 'padding', value)
-        self.assertEqual(result, 42)
-
-    def test_child_get_property_return_with_implicit_gvalue(self):
-        box = Gtk.Box()
-        child = Gtk.Button()
-        box.pack_start(child, expand=False, fill=True, padding=42)
-
-        result = box.child_get_property(child, 'padding')
-        self.assertEqual(result, 42)
-
-    def test_child_get_property_error(self):
-        box = Gtk.Box()
-        child = Gtk.Button()
-        box.pack_start(child, expand=False, fill=True, padding=42)
-        with self.assertRaises(ValueError):
-            box.child_get_property(child, 'not-a-valid-child-property')
-
-    def test_child_get_and_set(self):
-        box = Gtk.Box()
-        child = Gtk.Button()
-        box.pack_start(child, expand=True, fill=True, padding=42)
-
-        expand, fill, padding = box.child_get(child, 'expand', 'fill', 'padding')
-        self.assertEqual(expand, True)
-        self.assertEqual(fill, True)
-        self.assertEqual(padding, 42)
-
-        box.child_set(child, expand=False, fill=False, padding=21, pack_type=1)
-        expand, fill, padding, pack_type = box.child_get(child, 'expand', 'fill', 'padding', 'pack-type')
-        self.assertEqual(expand, False)
-        self.assertEqual(fill, False)
-        self.assertEqual(padding, 21)

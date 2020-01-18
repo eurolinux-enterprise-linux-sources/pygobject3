@@ -16,11 +16,14 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see <http://www.gnu.org/licenses/>.
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
+ * USA
  */
 
-#include "pygi-ccallback.h"
+#include "pygi-private.h"
 
+#include <pygobject.h>
 #include <girepository.h>
 #include <pyglib-python-compat.h>
 
@@ -31,16 +34,17 @@ _ccallback_call(PyGICCallback *self, PyObject *args, PyObject *kwargs)
     PyObject *result;
 
     if (self->cache == NULL) {
-        self->cache = (PyGICCallbackCache *)pygi_ccallback_cache_new (self->info,
-                                                                      self->callback);
+        self->cache = _pygi_callable_cache_new (self->info, TRUE);
         if (self->cache == NULL)
             return NULL;
     }
 
-    result = pygi_ccallback_cache_invoke (self->cache,
-                                          args,
-                                          kwargs,
-                                          self->user_data);
+    result = pygi_callable_info_invoke( (GIBaseInfo *) self->info,
+                                         args,
+                                         kwargs,
+                                         self->cache,
+                                         self->callback,
+                                         self->user_data);
     return result;
 }
 
@@ -77,12 +81,6 @@ static void
 _ccallback_dealloc (PyGICCallback *self)
 {
     g_base_info_unref ( (GIBaseInfo *)self->info);
-
-    if (self->cache != NULL) {
-        pygi_callable_cache_free ( (PyGICallableCache *)self->cache);
-    }
-
-    Py_TYPE (self)->tp_free ((PyObject *)self);
 }
 
 void

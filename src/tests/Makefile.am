@@ -1,17 +1,10 @@
 CLEANFILES =
-check_LTLIBRARIES = libgimarshallingtests.la
+noinst_LTLIBRARIES = libgimarshallingtests.la
 test_typelibs = GIMarshallingTests-1.0.typelib
 
-nodist_libgimarshallingtests_la_SOURCES = \
-	$(GI_DATADIR)/tests/gimarshallingtests.c \
-	$(GI_DATADIR)/tests/gimarshallingtests.h
-
-dist_libgimarshallingtests_la_SOURCES = \
-	$(srcdir)/gimarshallingtestsextra.c \
-	$(srcdir)/gimarshallingtestsextra.h
-
+nodist_libgimarshallingtests_la_SOURCES = $(GI_DATADIR)/tests/gimarshallingtests.c $(GI_DATADIR)/tests/gimarshallingtests.h
 libgimarshallingtests_la_CFLAGS = $(GLIB_CFLAGS)
-libgimarshallingtests_la_LDFLAGS = -module -avoid-version $(GLIB_LIBS) -no-undefined
+libgimarshallingtests_la_LDFLAGS = -module -avoid-version $(GLIB_LIBS)
 
 # This is a hack to make sure a shared library is built
 libgimarshallingtests.la: $(libgimarshallingtests_la_OBJECTS) $(libgimarshallingtests_la_DEPENDENCIES)
@@ -24,19 +17,17 @@ GIMarshallingTests-1.0.gir: libgimarshallingtests.la Makefile
 	--library=libgimarshallingtests.la \
 	--libtool="$(top_builddir)/libtool" \
 	--output $@ \
-	$(nodist_libgimarshallingtests_la_SOURCES) \
-	$(dist_libgimarshallingtests_la_SOURCES)
-
+	$(nodist_libgimarshallingtests_la_SOURCES)
 GIMarshallingTests-1.0.typelib: GIMarshallingTests-1.0.gir Makefile
 	$(AM_V_GEN) g-ir-compiler $< -o $@
 
 # regress.c needs cairo
 if ENABLE_CAIRO
-check_LTLIBRARIES += libregress.la
+noinst_LTLIBRARIES += libregress.la
 test_typelibs += Regress-1.0.typelib
 nodist_libregress_la_SOURCES = $(GI_DATADIR)/tests/regress.c $(GI_DATADIR)/tests/regress.h
 libregress_la_CFLAGS = $(GIO_CFLAGS) $(CAIRO_CFLAGS)
-libregress_la_LDFLAGS = -module -avoid-version $(GIO_LIBS) $(CAIRO_LIBS) -no-undefined
+libregress_la_LDFLAGS = -module -avoid-version $(GIO_LIBS) $(CAIRO_LIBS)
 
 libregress.la: $(libregress_la_OBJECTS) $(libregress_la_DEPENDENCIES)
 	$(AM_V_GEN) $(LINK) -rpath $(pkgpyexecdir) $(libregress_la_LDFLAGS) $(libregress_la_OBJECTS) $(libregress_la_LIBADD) $(LIBS)
@@ -61,10 +52,10 @@ gschemas.compiled: org.gnome.test.gschema.xml
 
 CLEANFILES += Regress-1.0.gir Regress-1.0.typelib GIMarshallingTests-1.0.gir GIMarshallingTests-1.0.typelib gschemas.compiled
 
-check_LTLIBRARIES += testhelper.la
+noinst_LTLIBRARIES += testhelper.la
 
-testhelper_la_CFLAGS = -I$(top_srcdir)/gi $(PYTHON_INCLUDES) $(GLIB_CFLAGS)
-testhelper_la_LDFLAGS = -module -avoid-version -no-undefined $(PYTHON_LIBS)
+testhelper_la_CFLAGS = -I$(top_srcdir)/gi/_gobject -I$(top_srcdir)/gi/_glib $(PYTHON_INCLUDES) $(GLIB_CFLAGS)
+testhelper_la_LDFLAGS = -module -avoid-version
 testhelper_la_LIBADD = $(GLIB_LIBS)
 testhelper_la_SOURCES = \
 	testhelpermodule.c \
@@ -77,14 +68,13 @@ testhelper.la: $(testhelper_la_OBJECTS) $(testhelper_la_DEPENDENCIES)
 	$(AM_V_GEN) $(LINK) -rpath $(pkgpyexecdir) $(testhelper_la_LDFLAGS) $(testhelper_la_OBJECTS) $(testhelper_la_LIBADD) $(LIBS)
 
 
-.la.$(OS_EXT):
+.la.so:
 	test -L $@ || $(LN_S) .libs/$@ $@
 
 
-all: $(check_LTLIBRARIES:.la=.$(OS_EXT))
+all: $(LTLIBRARIES:.la=.so)
 
 EXTRA_DIST = \
-	helper.py \
 	compathelper.py \
 	runtests.py \
 	runtests-windows.py \
@@ -94,9 +84,6 @@ EXTRA_DIST = \
 	test-unknown.h \
 	te_ST@nouppera \
 	org.gnome.test.gschema.xml \
-	test_cairo.py \
-	test_error.py \
-	test_fields.py \
 	test_gio.py \
 	test_glib.py \
 	test_gobject.py \
@@ -112,20 +99,16 @@ EXTRA_DIST = \
 	test_source.py \
 	test_subprocess.py \
 	test_thread.py \
-	test_typeclass.py \
 	test_everything.py \
 	test_gi.py \
 	test_gdbus.py \
-	test_import_machinery.py \
+	test_overrides.py \
 	test_overrides_glib.py \
 	test_overrides_pango.py \
 	test_overrides_gdk.py \
 	test_overrides_gtk.py \
 	test_atoms.py \
 	test_generictreemodel.py \
-	test_docstring.py \
-	test_repository.py \
-	test_resulttuple.py \
 	compat_test_pygtk.py \
 	gi/__init__.py \
 	gi/overrides/__init__.py \
@@ -133,8 +116,9 @@ EXTRA_DIST = \
 	$(NULL)
 
 clean-local:
-	rm -f $(check_LTLIBRARIES:.la=.$(OS_EXT)) file.txt~
+	rm -f $(LTLIBRARIES:.la=.so) file.txt~
 
+DBUS_LAUNCH=$(shell which dbus-launch)
 RUN_TESTS_ENV_VARS= \
 	PYTHONPATH=$(top_builddir):$(top_builddir)/tests:$${PYTHONPATH:+:$$PYTHONPATH} \
 	LD_LIBRARY_PATH=$(builddir)/.libs:$$LD_LIBRARY_PATH \
@@ -147,9 +131,17 @@ RUN_TESTS_ENV_VARS= \
 
 # pygtkcompat tests need to be run in a separate process as they
 # clobber global name space
-check-local: $(check_LTLIBRARIES:.la=.$(OS_EXT)) $(test_typelibs) gschemas.compiled
-	$(RUN_TESTS_ENV_VARS) dbus-run-session -- $(EXEC_NAME) $(PYTHON) -Wd $(srcdir)/runtests.py; rc=$$?; \
-	[ "$$rc" -ne 0 ] || [ -n "$$TEST_NAMES" ] || { TEST_NAMES=compat_test_pygtk $(RUN_TESTS_ENV_VARS) dbus-run-session -- $(EXEC_NAME) $(PYTHON) -Wd -Werror::PendingDeprecationWarning -Werror::DeprecationWarning -Werror::RuntimeWarning $(srcdir)/runtests.py; rc=$$?; }; \
+check-local: $(LTLIBRARIES:.la=.so) $(test_typelibs) gschemas.compiled
+	@echo "  CHECK  Pyflakes"
+	@if type pyflakes >/dev/null 2>&1; then pyflakes $(top_srcdir); else echo "skipped, pyflakes not installed"; fi
+	@if test -z "$$SKIP_PEP8"; then \
+		echo "  CHECK  PEP8"; \
+		if type pep8 >/dev/null 2>&1; then pep8 --ignore=E501,E123,E124 --repeat --show-source $(top_srcdir); else echo "skipped, pep8 not installed"; fi; \
+	fi
+	export `$(DBUS_LAUNCH)` && \
+	$(RUN_TESTS_ENV_VARS) $(EXEC_NAME) $(PYTHON) -Wd $(srcdir)/runtests.py; rc=$$?; \
+	[ "$$rc" -ne 0 ] || [ -n "$$TEST_NAMES" ] || { TEST_NAMES=compat_test_pygtk $(RUN_TESTS_ENV_VARS) $(EXEC_NAME) $(PYTHON) -Wd -Werror::PendingDeprecationWarning -Werror::DeprecationWarning -Werror::RuntimeWarning $(srcdir)/runtests.py; rc=$$?; }; \
+	kill $$DBUS_SESSION_BUS_PID; \
 	exit $$rc
 
 check.gdb:
@@ -158,30 +150,5 @@ check.gdb:
 check.nemiver:
 	EXEC_NAME="nemiver" $(MAKE) check
 
-# Note G_SLICE in these check variations is intended to clobber the default set in RUN_TESTS_ENV_VARS
 check.valgrind:
-	EXEC_NAME="G_SLICE=always-malloc G_DEBUG=gc-friendly \
-	valgrind --leak-check=full --show-possibly-lost=no --num-callers=20 \
-	--suppressions=$(top_srcdir)/tests/$(PYTHON_BASENAME).supp \
-	" \
-	$(MAKE) check
-
-check.valgrindlog:
-	mkdir -p $(top_builddir)/tmp
-	EXEC_NAME="G_SLICE=always-malloc G_DEBUG=gc-friendly \
-	valgrind --leak-check=full --show-possibly-lost=no --num-callers=20 \
-	--suppressions=$(top_srcdir)/tests/$(PYTHON_BASENAME).supp \
-	--child-silent-after-fork=yes \
-	--log-file=$(top_builddir)/tmp/`git rev-parse HEAD | cut -c1-8`-$$TEST_NAMES.log \
-	" \
-	$(MAKE) check
-
-check.valgrindxml:
-	mkdir -p $(top_builddir)/tmp
-	EXEC_NAME="G_SLICE=always-malloc G_DEBUG=gc-friendly \
-	valgrind --leak-check=full --show-possibly-lost=no --num-callers=20 \
-	--suppressions=$(top_srcdir)/tests/$(PYTHON_BASENAME).supp \
-	--child-silent-after-fork=yes \
-	--xml=yes --xml-file=$(top_builddir)/tmp/`git rev-parse HEAD | cut -c1-8`-$$TEST_NAMES.xml \
-	" \
-	$(MAKE) check
+	EXEC_NAME="valgrind --leak-check=full --show-possibly-lost=no --suppressions=python.supp" G_DEBUG=gc-friendly $(MAKE) check

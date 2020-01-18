@@ -2,7 +2,6 @@
  * vim: tabstop=4 shiftwidth=4 expandtab
  *
  * Copyright (C) 2011 John (J5) Palmieri <johnp@redhat.com>
- * Copyright (C) 2013 Simon Feltman <sfeltman@gnome.org>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -15,7 +14,9 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see <http://www.gnu.org/licenses/>.
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
+ * USA
  */
 
 #ifndef __PYGI_CACHE_H__
@@ -23,29 +24,19 @@
 
 #include <Python.h>
 #include <girepository.h>
-#include <girffi.h>
 
 #include "pygi-invoke-state-struct.h"
 
 G_BEGIN_DECLS
 
-typedef struct _PyGIArgCache PyGIArgCache;
 typedef struct _PyGICallableCache PyGICallableCache;
-typedef struct _PyGIFunctionCache PyGIFunctionCache;
-typedef struct _PyGIVFuncCache PyGIVFuncCache;
-
-typedef PyGIFunctionCache PyGICCallbackCache;
-typedef PyGIFunctionCache PyGIConstructorCache;
-typedef PyGIFunctionCache PyGIFunctionWithInstanceCache;
-typedef PyGIFunctionCache PyGIMethodCache;
-typedef PyGICallableCache PyGIClosureCache;
+typedef struct _PyGIArgCache PyGIArgCache;
 
 typedef gboolean (*PyGIMarshalFromPyFunc) (PyGIInvokeState   *state,
                                            PyGICallableCache *callable_cache,
                                            PyGIArgCache      *arg_cache,
                                            PyObject          *py_arg,
-                                           GIArgument        *arg,
-                                           gpointer          *cleanup_data);
+                                           GIArgument        *arg);
 
 typedef PyObject *(*PyGIMarshalToPyFunc) (PyGIInvokeState   *state,
                                           PyGICallableCache *callable_cache,
@@ -54,7 +45,6 @@ typedef PyObject *(*PyGIMarshalToPyFunc) (PyGIInvokeState   *state,
 
 typedef void (*PyGIMarshalCleanupFunc) (PyGIInvokeState *state,
                                         PyGIArgCache    *arg_cache,
-                                        PyObject        *py_arg, /* always NULL for to_py cleanup */
                                         gpointer         data,
                                         gboolean         was_processed);
 
@@ -66,6 +56,10 @@ typedef void (*PyGIMarshalCleanupFunc) (PyGIInvokeState *state,
  *  - PYGI_META_ARG_TYPE_CHILD - Children without python argument are
  *    ignored by the marshallers and handled directly by their parents
  *    marshaller.
+ *  - PYGI_META_ARG_TYPE_CHILD_NEEDS_UPDATE -Sometimes children arguments
+ *    come before the parent.  In these cases they need to be flagged
+ *    so that the argument list counts must be updated for the cache to
+ *    be valid
  *  - Children with pyargs (PYGI_META_ARG_TYPE_CHILD_WITH_PYARG) are processed
  *    the same as other child args but also have an index into the 
  *    python parameters passed to the invoker
@@ -73,29 +67,38 @@ typedef void (*PyGIMarshalCleanupFunc) (PyGIInvokeState *state,
 typedef enum {
     PYGI_META_ARG_TYPE_PARENT,
     PYGI_META_ARG_TYPE_CHILD,
+    PYGI_META_ARG_TYPE_CHILD_NEEDS_UPDATE,
     PYGI_META_ARG_TYPE_CHILD_WITH_PYARG,
     PYGI_META_ARG_TYPE_CLOSURE,
 } PyGIMetaArgType;
 
 /*
- * Argument direction types denotes how we marshal,
- * e.g. to Python or from Python or both.
+ * GI determines function types via a combination of flags and info classes.
+ * Since for branching purposes they are mutually exclusive, the 
+ * PyGIFunctionType enum consolidates them into one enumeration for ease of 
+ * branching and debugging.
  */
 typedef enum {
-    PYGI_DIRECTION_TO_PYTHON     = 1 << 0,
-    PYGI_DIRECTION_FROM_PYTHON   = 1 << 1,
-    PYGI_DIRECTION_BIDIRECTIONAL = PYGI_DIRECTION_TO_PYTHON | PYGI_DIRECTION_FROM_PYTHON
- } PyGIDirection;
+    PYGI_FUNCTION_TYPE_FUNCTION,
+    PYGI_FUNCTION_TYPE_METHOD,
+    PYGI_FUNCTION_TYPE_CONSTRUCTOR,
+    PYGI_FUNCTION_TYPE_VFUNC,
+    PYGI_FUNCTION_TYPE_CALLBACK,
+    PYGI_FUNCTION_TYPE_CCALLBACK,
+ } PyGIFunctionType;
 
 /*
  * In PyGI IN and OUT arguments mean different things depending on the context
- * of the callable, e.g. is it a callback that is being called from C or a
- * function that is being called from Python.
+ * of the callable (e.g. is it a callback that is being called from C or a
+ * function that is being called from python).  We don't as much care if the
+ * parameter is an IN or OUT C parameter, than we do if the parameter is being
+ * marshalled into Python or from Python.
  */
 typedef enum {
-    PYGI_CALLING_CONTEXT_IS_FROM_C,
-    PYGI_CALLING_CONTEXT_IS_FROM_PY
-} PyGICallingContext;
+    PYGI_DIRECTION_TO_PYTHON,
+    PYGI_DIRECTION_FROM_PYTHON,
+    PYGI_DIRECTION_BIDIRECTIONAL
+ } PyGIDirection;
 
 
 struct _PyGIArgCache
@@ -107,7 +110,6 @@ struct _PyGIArgCache
     gboolean is_caller_allocates;
     gboolean is_skipped;
     gboolean allow_none;
-    gboolean has_default;
 
     PyGIDirection direction;
     GITransfer transfer;
@@ -124,26 +126,18 @@ struct _PyGIArgCache
 
     gssize c_arg_index;
     gssize py_arg_index;
-
-    /* Set when has_default is true. */
-    GIArgument default_value;
 };
 
 typedef struct _PyGISequenceCache
 {
     PyGIArgCache arg_cache;
-    PyGIArgCache *item_cache;
-} PyGISequenceCache;
-
-typedef struct _PyGIArgGArray
-{
-    PyGISequenceCache seq_cache;
     gssize fixed_size;
     gssize len_arg_index;
     gboolean is_zero_terminated;
     gsize item_size;
     GIArrayType array_type;
-} PyGIArgGArray;
+    PyGIArgCache *item_cache;
+} PyGISequenceCache;
 
 typedef struct _PyGIInterfaceCache
 {
@@ -155,171 +149,48 @@ typedef struct _PyGIInterfaceCache
     gchar *type_name;
 } PyGIInterfaceCache;
 
+typedef struct _PyGIHashCache
+{
+    PyGIArgCache arg_cache;
+    PyGIArgCache *key_cache;
+    PyGIArgCache *value_cache;
+} PyGIHashCache;
+
+typedef struct _PyGICallbackCache
+{
+    PyGIArgCache arg_cache;
+    gssize user_data_index;
+    gssize destroy_notify_index;
+    GIScopeType scope;
+    GIInterfaceInfo *interface_info;
+} PyGICallbackCache;
+
 struct _PyGICallableCache
 {
     const gchar *name;
-    const gchar *container_name;
-    const gchar *namespace;
 
-    PyGICallingContext calling_context;
+    PyGIFunctionType function_type;
 
     PyGIArgCache *return_cache;
-    GPtrArray *args_cache;
+    PyGIArgCache **args_cache;
     GSList *to_py_args;
     GSList *arg_name_list; /* for keyword arg matching */
     GHashTable *arg_name_hash;
-    gboolean throws;
 
-    /* Index of user_data arg passed to a callable. */
-    gssize user_data_index;
-
-    /* Index of user_data arg that can eat variable args passed to a callable. */
-    gssize user_data_varargs_index;
-
-    /* Number of args already added */
-    gssize args_offset;
-
-    /* Number of out args passed to g_function_info_invoke.
-     * This is used for the length of PyGIInvokeState.out_values */
+    /* counts */
+    gssize n_from_py_args;
     gssize n_to_py_args;
-
-    /* If the callable return value gets used */
-    gboolean has_return;
-
-    /* The type used for returning multiple values or NULL */
-    PyTypeObject* resulttuple_type;
-
-    /* Number of out args for g_function_info_invoke that will be skipped
-     * when marshaling to Python due to them being implicitly available
-     * (list/array length).
-     */
     gssize n_to_py_child_args;
 
-    /* Number of Python arguments expected for invoking the gi function. */
+    gssize n_args;
     gssize n_py_args;
-
-    /* Minimum number of args required to call the callable from Python.
-     * This count does not include args with defaults. */
-    gssize n_py_required_args;
-
-    void     (*deinit)              (PyGICallableCache *callable_cache);
-
-    gboolean (*generate_args_cache) (PyGICallableCache *callable_cache,
-                                     GICallableInfo *callable_info);
 };
 
-struct _PyGIFunctionCache {
-    PyGICallableCache callable_cache;
+void _pygi_arg_cache_clear	(PyGIArgCache *cache);
+void _pygi_callable_cache_free	(PyGICallableCache *cache);
 
-    /* An invoker with ffi_cif already setup */
-    GIFunctionInvoker invoker;
-
-    PyObject *(*invoke) (PyGIFunctionCache *function_cache,
-                         PyGIInvokeState *state,
-                         PyObject *py_args,
-                         PyObject *py_kwargs);
-} ;
-
-struct _PyGIVFuncCache {
-    PyGIFunctionWithInstanceCache fwi_cache;
-
-    GIBaseInfo *info;
-};
-
-
-gboolean
-pygi_arg_base_setup      (PyGIArgCache *arg_cache,
-                          GITypeInfo   *type_info,
-                          GIArgInfo    *arg_info,  /* may be NULL for return arguments */
-                          GITransfer    transfer,
-                          PyGIDirection direction);
-
-gboolean
-pygi_arg_interface_setup (PyGIInterfaceCache *iface_cache,
-                          GITypeInfo         *type_info,
-                          GIArgInfo          *arg_info,  /* may be NULL for return arguments */
-                          GITransfer          transfer,
-                          PyGIDirection       direction,
-                          GIInterfaceInfo    *iface_info);
-
-gboolean
-pygi_arg_sequence_setup  (PyGISequenceCache  *sc,
-                          GITypeInfo         *type_info,
-                          GIArgInfo          *arg_info,    /* may be NULL for return arguments */
-                          GITransfer          transfer,
-                          PyGIDirection       direction,
-                          PyGICallableCache  *callable_cache);
-
-PyGIArgCache *
-pygi_arg_interface_new_from_info (GITypeInfo         *type_info,
-                                  GIArgInfo          *arg_info,     /* may be NULL for return arguments */
-                                  GITransfer          transfer,
-                                  PyGIDirection       direction,
-                                  GIInterfaceInfo    *iface_info);
-
-PyGIArgCache *
-pygi_arg_cache_alloc     (void);
-
-PyGIArgCache *
-pygi_arg_cache_new       (GITypeInfo *type_info,
-                          GIArgInfo *arg_info,
-                          GITransfer transfer,
-                          PyGIDirection direction,
-                          PyGICallableCache *callable_cache,
-                          /* will be removed */
-                          gssize c_arg_index,
-                          gssize py_arg_index);
-
-void
-pygi_arg_cache_free      (PyGIArgCache *cache);
-
-void
-pygi_callable_cache_free    (PyGICallableCache *cache);
-
-gchar *
-pygi_callable_cache_get_full_name (PyGICallableCache *cache);
-
-PyGIFunctionCache *
-pygi_function_cache_new     (GICallableInfo *info);
-
-PyObject *
-pygi_function_cache_invoke  (PyGIFunctionCache *function_cache,
-                             PyObject *py_args,
-                             PyObject *py_kwargs);
-
-PyGIFunctionCache *
-pygi_ccallback_cache_new    (GICallableInfo *info,
-                             GCallback function_ptr);
-
-PyObject *
-pygi_ccallback_cache_invoke (PyGIFunctionCache *function_cache,
-                             PyObject *py_args,
-                             PyObject *py_kwargs,
-                             gpointer user_data);
-
-PyGIFunctionCache *
-pygi_constructor_cache_new  (GICallableInfo *info);
-
-PyGIFunctionCache *
-pygi_method_cache_new       (GICallableInfo *info);
-
-PyGIFunctionCache *
-pygi_vfunc_cache_new        (GICallableInfo *info);
-
-PyGIClosureCache *
-pygi_closure_cache_new      (GICallableInfo *info);
-
-#define _pygi_callable_cache_args_len(cache) ((cache)->args_cache)->len
-
-inline static PyGIArgCache *
-_pygi_callable_cache_get_arg (PyGICallableCache *cache, guint index) {
-    return (PyGIArgCache *) g_ptr_array_index (cache->args_cache, index);
-}
-
-inline static void
-_pygi_callable_cache_set_arg (PyGICallableCache *cache, guint index, PyGIArgCache *arg_cache) {
-    cache->args_cache->pdata[index] = arg_cache;
-}
+PyGICallableCache *_pygi_callable_cache_new (GICallableInfo *callable_info,
+                                             gboolean is_ccallback);
 
 G_END_DECLS
 

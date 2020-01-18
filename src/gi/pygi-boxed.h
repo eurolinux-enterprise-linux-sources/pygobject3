@@ -14,35 +14,27 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see <http://www.gnu.org/licenses/>.
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
+ * USA
  */
 
 #ifndef __PYGI_BOXED_H__
 #define __PYGI_BOXED_H__
 
 #include <Python.h>
-#include <girepository.h>
-#include "pygobject-internal.h"
 
 G_BEGIN_DECLS
 
-typedef struct {
-    PyGBoxed base;
-    gboolean slice_allocated;
-    gsize size;
-} PyGIBoxed;
-
 extern PyTypeObject PyGIBoxed_Type;
 
-PyObject * _pygi_boxed_new (PyTypeObject *pytype,
+PyObject * _pygi_boxed_new (PyTypeObject *type,
                             gpointer      boxed,
-                            gboolean      copy_boxed,
+                            gboolean      free_on_dealloc,
                             gsize         allocated_slice);
 
 void * _pygi_boxed_alloc (GIBaseInfo *info,
                           gsize *size);
-
-void _pygi_boxed_copy_in_place  (PyGIBoxed *self);
 
 void _pygi_boxed_register_types (PyObject *m);
 

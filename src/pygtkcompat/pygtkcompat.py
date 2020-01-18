@@ -38,10 +38,8 @@ import warnings
 try:
     # Python 3
     from collections import UserList
+    from imp import reload
     UserList  # pyflakes
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore')
-        from imp import reload
 except ImportError:
     # Python 2 ships that in a different module
     from UserList import UserList
@@ -92,8 +90,8 @@ def enable():
     # gobject
     from gi.repository import GObject
     sys.modules['gobject'] = GObject
-    from gi import _propertyhelper
-    sys.modules['gobject.propertyhelper'] = _propertyhelper
+    from gi._gobject import propertyhelper
+    sys.modules['gobject.propertyhelper'] = propertyhelper
 
     # gio
     from gi.repository import Gio
@@ -141,10 +139,7 @@ def enable_gtk(version='3.0'):
     Gdk.PixbufLoader = GdkPixbuf.PixbufLoader.new_with_type
     Gdk.pixbuf_new_from_data = GdkPixbuf.Pixbuf.new_from_data
     Gdk.pixbuf_new_from_file = GdkPixbuf.Pixbuf.new_from_file
-    try:
-        Gdk.pixbuf_new_from_file_at_scale = GdkPixbuf.Pixbuf.new_from_file_at_scale
-    except AttributeError:
-        pass
+    Gdk.pixbuf_new_from_file_at_scale = GdkPixbuf.Pixbuf.new_from_file_at_scale
     Gdk.pixbuf_new_from_file_at_size = GdkPixbuf.Pixbuf.new_from_file_at_size
     Gdk.pixbuf_new_from_inline = GdkPixbuf.Pixbuf.new_from_inline
     Gdk.pixbuf_new_from_stream = GdkPixbuf.Pixbuf.new_from_stream
@@ -354,15 +349,12 @@ def enable_gtk(version='3.0'):
     Gtk.image_new_from_file = Gtk.Image.new_from_file
     Gtk.settings_get_default = Gtk.Settings.get_default
     Gtk.window_set_default_icon = Gtk.Window.set_default_icon
-    try:
-        Gtk.clipboard_get = Gtk.Clipboard.get
-    except AttributeError:
-        pass
+    Gtk.clipboard_get = Gtk.Clipboard.get
 
-    # AccelGroup
+    #AccelGroup
     Gtk.AccelGroup.connect_group = Gtk.AccelGroup.connect
 
-    # StatusIcon
+    #StatusIcon
     Gtk.status_icon_position_menu = Gtk.StatusIcon.position_menu
     Gtk.StatusIcon.set_tooltip = Gtk.StatusIcon.set_tooltip_text
 
@@ -486,12 +478,18 @@ def enable_gtk(version='3.0'):
 
     # gtk.keysyms
 
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore', category=RuntimeWarning)
-        from gi.overrides import keysyms
-
+    class Keysyms(object):
+        pass
+    keysyms = Keysyms()
     sys.modules['gtk.keysyms'] = keysyms
     Gtk.keysyms = keysyms
+    for name in dir(Gdk):
+        if name.startswith('KEY_'):
+            target = name[4:]
+            if target[0] in '0123456789':
+                target = '_' + target
+            value = getattr(Gdk, name)
+            setattr(keysyms, target, value)
 
     from . import generictreemodel
     Gtk.GenericTreeModel = generictreemodel.GenericTreeModel

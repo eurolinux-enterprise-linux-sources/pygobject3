@@ -7,57 +7,42 @@
 
 G_BEGIN_DECLS
 
-typedef struct _PyGIInvokeArgState
-{
-    /* Holds memory for the C value of arguments marshaled "to" or "from" Python. */
-    GIArgument arg_value;
-
-    /* Holds pointers to values in arg_values or a caller allocated chunk of
-     * memory via arg_pointer.v_pointer.
-     */
-    GIArgument arg_pointer;
-
-    /* Holds from_py marshaler cleanup data. */
-    gpointer arg_cleanup_data;
-
-} PyGIInvokeArgState;
-
-
 typedef struct _PyGIInvokeState
 {
     PyObject *py_in_args;
     gssize n_py_in_args;
+    gssize current_arg;
 
-    /* Number of arguments the ffi wrapped C function takes. Used as the exact
-     * count for argument related arrays held in this struct.
+    GType implementor_gtype;
+
+    GIArgument **args;
+    GIArgument *in_args;
+
+    /* Generic array allocated to the same length as args
+     * for use as extra per-arg state data. */
+    gpointer *args_data;
+
+    /* Out args and out values
+     * In order to pass a parameter and get something back out in C
+     * we need to pass a pointer to the value, e.g.
+     *    int *out_integer;
+     *
+     * so while out_args == out_integer, out_value == *out_integer
+     * or in other words out_args = &out_values
+     *
+     * We do all of our processing on out_values but we pass out_args to 
+     * the actual function.
      */
-    gssize n_args;
+    GIArgument *out_args;
+    GIArgument *out_values;
 
-    /* List of arguments passed to ffi. Elements can point directly to values held in
-     * arg_values for "in/from Python" or indirectly via arg_pointers for
-     * "out/inout/to Python". In the latter case, the args[x].arg_pointer.v_pointer
-     * member points to memory for the value storage.
-     */
-    GIArgument **ffi_args;
-
-    /* Array of size n_args containing per argument state */
-    PyGIInvokeArgState *args;
-
-    /* Memory to receive the result of the C ffi function call. */
     GIArgument return_arg;
 
-    /* A GError exception which is indirectly bound into the last position of
-     * the "args" array if the callable caches "throws" member is set.
-     */
     GError *error;
 
     gboolean failed;
 
     gpointer user_data;
-
-    /* Function pointer to call with ffi. */
-    gpointer function_ptr;
-
 } PyGIInvokeState;
 
 G_END_DECLS

@@ -15,7 +15,9 @@
 # Lesser General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public
-# License along with this library; if not, see <http://www.gnu.org/licenses/>.
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
+# USA
 
 
 # system
@@ -26,15 +28,9 @@ import unittest
 
 # pygobject
 from gi.repository import GObject
-
-try:
-    from gi.repository import Gtk
-    from pygtkcompat.generictreemodel import GenericTreeModel
-    from pygtkcompat.generictreemodel import _get_user_data_as_pyobject
-    has_gtk = True
-except ImportError:
-    GenericTreeModel = object
-    has_gtk = False
+from gi.repository import Gtk
+from pygtkcompat.generictreemodel import GenericTreeModel
+from pygtkcompat.generictreemodel import _get_user_data_as_pyobject
 
 
 class Node(object):
@@ -131,7 +127,6 @@ class TesterModel(GenericTreeModel):
             return child.parent()
 
 
-@unittest.skipUnless(has_gtk, 'Gtk not available')
 class TestReferences(unittest.TestCase):
     def setUp(self):
         pass
@@ -284,7 +279,6 @@ class TestReferences(unittest.TestCase):
             self.assertEqual(ref(), None)
 
 
-@unittest.skipUnless(has_gtk, 'Gtk not available')
 class TestIteration(unittest.TestCase):
     def test_iter_next_root(self):
         model = TesterModel()
@@ -312,7 +306,6 @@ class ErrorModel(GenericTreeModel):
     pass
 
 
-@unittest.skipUnless(has_gtk, 'Gtk not available')
 class ExceptHook(object):
     """
     Temporarily installs an exception hook in a context which
@@ -321,12 +314,12 @@ class ExceptHook(object):
     are never bubbled through from python to C back to python.
     This works because exception hooks are called in PyErr_Print.
     """
-    def __init__(self, *expected_exc_types):
-        self._expected_exc_types = expected_exc_types
+    def __init__(self, exc_type):
+        self._exc_type = exc_type
         self._exceptions = []
 
     def _excepthook(self, exc_type, value, traceback):
-        self._exceptions.append((exc_type, value))
+        self._exceptions.append(exc_type)
 
     def __enter__(self):
         self._oldhook = sys.excepthook
@@ -335,16 +328,10 @@ class ExceptHook(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         sys.excepthook = self._oldhook
-        error_message = 'Expecting the following exceptions: %s, got: %s' % \
-            (str(self._expected_exc_types), '\n'.join([str(item) for item in self._exceptions]))
-
-        assert len(self._expected_exc_types) == len(self._exceptions), error_message
-
-        for expected, got in zip(self._expected_exc_types, [exc[0] for exc in self._exceptions]):
-            assert issubclass(got, expected), error_message
+        assert len(self._exceptions) == 1, 'Expecting exactly one exception of type %s' % self._exc_type
+        assert issubclass(self._exceptions[0], self._exc_type), 'Expecting exactly one exception of type %s' % self._exc_type
 
 
-@unittest.skipUnless(has_gtk, 'Gtk not available')
 class TestReturnsAfterError(unittest.TestCase):
     def setUp(self):
         self.model = ErrorModel()
@@ -360,7 +347,7 @@ class TestReturnsAfterError(unittest.TestCase):
         self.assertEqual(count, 0)
 
     def test_get_column_type(self):
-        with ExceptHook(NotImplementedError, TypeError):
+        with ExceptHook(NotImplementedError):
             col_type = self.model.get_column_type(0)
         self.assertEqual(col_type, GObject.TYPE_INVALID)
 

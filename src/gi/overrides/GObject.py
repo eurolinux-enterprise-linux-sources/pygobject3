@@ -23,25 +23,25 @@
 
 import sys
 import warnings
+import functools
 from collections import namedtuple
 
 import gi.overrides
 import gi.module
-from gi.overrides import override, deprecated_attr
+from gi.overrides import override
 from gi.repository import GLib
 from gi import PyGIDeprecationWarning
 
-from gi import _propertyhelper as propertyhelper
-from gi import _signalhelper as signalhelper
-
-_gobject = gi._gi._gobject
+from gi._gobject import _gobject
+from gi._gobject import propertyhelper
+from gi._gobject import signalhelper
 
 GObjectModule = gi.module.get_introspection_module('GObject')
 
 __all__ = []
 
 
-from gi import _option as option
+from gi._glib import option
 sys.modules['gi._gobject.option'] = option
 
 
@@ -56,11 +56,10 @@ for name in ['markup_escape_text', 'get_application_name',
              'idle_add', 'timeout_add', 'timeout_add_seconds',
              'io_add_watch', 'child_watch_add', 'get_current_time',
              'spawn_async']:
-    globals()[name] = getattr(GLib, name)
-    deprecated_attr("GObject", name, "GLib." + name)
+    globals()[name] = gi.overrides.deprecated(getattr(GLib, name), 'GLib.' + name)
     __all__.append(name)
 
-# deprecated constants
+# constants are also deprecated, but cannot mark them as such
 for name in ['PRIORITY_DEFAULT', 'PRIORITY_DEFAULT_IDLE', 'PRIORITY_HIGH',
              'PRIORITY_HIGH_IDLE', 'PRIORITY_LOW',
              'IO_IN', 'IO_OUT', 'IO_PRI', 'IO_ERR', 'IO_HUP', 'IO_NVAL',
@@ -78,21 +77,25 @@ for name in ['PRIORITY_DEFAULT', 'PRIORITY_DEFAULT_IDLE', 'PRIORITY_HIGH',
              'OPTION_FLAG_NOALIAS', 'OPTION_ERROR_UNKNOWN_OPTION',
              'OPTION_ERROR_BAD_VALUE', 'OPTION_ERROR_FAILED', 'OPTION_REMAINING',
              'glib_version']:
-    with warnings.catch_warnings():
-        # TODO: this uses deprecated Glib attributes, silence for now
-        warnings.simplefilter('ignore', PyGIDeprecationWarning)
-        globals()[name] = getattr(GLib, name)
-    deprecated_attr("GObject", name, "GLib." + name)
+    globals()[name] = getattr(GLib, name)
     __all__.append(name)
 
 
-for name in ['G_MININT8', 'G_MAXINT8', 'G_MAXUINT8', 'G_MININT16',
-             'G_MAXINT16', 'G_MAXUINT16', 'G_MININT32', 'G_MAXINT32',
-             'G_MAXUINT32', 'G_MININT64', 'G_MAXINT64', 'G_MAXUINT64']:
-    new_name = name.split("_", 1)[-1]
-    globals()[name] = getattr(GLib, new_name)
-    deprecated_attr("GObject", name, "GLib." + new_name)
-    __all__.append(name)
+G_MININT8 = GLib.MININT8
+G_MAXINT8 = GLib.MAXINT8
+G_MAXUINT8 = GLib.MAXUINT8
+G_MININT16 = GLib.MININT16
+G_MAXINT16 = GLib.MAXINT16
+G_MAXUINT16 = GLib.MAXUINT16
+G_MININT32 = GLib.MININT32
+G_MAXINT32 = GLib.MAXINT32
+G_MAXUINT32 = GLib.MAXUINT32
+G_MININT64 = GLib.MININT64
+G_MAXINT64 = GLib.MAXINT64
+G_MAXUINT64 = GLib.MAXUINT64
+__all__ += ['G_MININT8', 'G_MAXINT8', 'G_MAXUINT8', 'G_MININT16',
+            'G_MAXINT16', 'G_MAXUINT16', 'G_MININT32', 'G_MAXINT32',
+            'G_MAXUINT32', 'G_MININT64', 'G_MAXINT64', 'G_MAXUINT64']
 
 # these are not currently exported in GLib gir, presumably because they are
 # platform dependent; so get them from our static bindings
@@ -100,9 +103,7 @@ for name in ['G_MINFLOAT', 'G_MAXFLOAT', 'G_MINDOUBLE', 'G_MAXDOUBLE',
              'G_MINSHORT', 'G_MAXSHORT', 'G_MAXUSHORT', 'G_MININT', 'G_MAXINT',
              'G_MAXUINT', 'G_MINLONG', 'G_MAXLONG', 'G_MAXULONG', 'G_MAXSIZE',
              'G_MINSSIZE', 'G_MAXSSIZE', 'G_MINOFFSET', 'G_MAXOFFSET']:
-    new_name = name.split("_", 1)[-1]
-    globals()[name] = getattr(GLib, new_name)
-    deprecated_attr("GObject", name, "GLib." + new_name)
+    globals()[name] = getattr(_gobject, name)
     __all__.append(name)
 
 
@@ -144,44 +145,38 @@ __all__ += ['TYPE_INVALID', 'TYPE_NONE', 'TYPE_INTERFACE', 'TYPE_CHAR',
 
 
 # Deprecated, use GLib directly
-for name in ['Pid', 'GError', 'OptionGroup', 'OptionContext']:
-    globals()[name] = getattr(GLib, name)
-    deprecated_attr("GObject", name, "GLib." + name)
-    __all__.append(name)
+Pid = GLib.Pid
+GError = GLib.GError
+OptionGroup = GLib.OptionGroup
+OptionContext = GLib.OptionContext
+__all__ += ['Pid', 'GError', 'OptionGroup', 'OptionContext']
 
 
 # Deprecated, use: GObject.ParamFlags.* directly
-for name in ['PARAM_CONSTRUCT', 'PARAM_CONSTRUCT_ONLY', 'PARAM_LAX_VALIDATION',
-             'PARAM_READABLE', 'PARAM_WRITABLE']:
-    new_name = name.split("_", 1)[-1]
-    globals()[name] = getattr(GObjectModule.ParamFlags, new_name)
-    deprecated_attr("GObject", name, "GObject.ParamFlags." + new_name)
-    __all__.append(name)
-
+PARAM_CONSTRUCT = GObjectModule.ParamFlags.CONSTRUCT
+PARAM_CONSTRUCT_ONLY = GObjectModule.ParamFlags.CONSTRUCT_ONLY
+PARAM_LAX_VALIDATION = GObjectModule.ParamFlags.LAX_VALIDATION
+PARAM_READABLE = GObjectModule.ParamFlags.READABLE
+PARAM_WRITABLE = GObjectModule.ParamFlags.WRITABLE
 # PARAM_READWRITE should come from the gi module but cannot due to:
 # https://bugzilla.gnome.org/show_bug.cgi?id=687615
-PARAM_READWRITE = GObjectModule.ParamFlags.READABLE | \
-    GObjectModule.ParamFlags.WRITABLE
-__all__.append("PARAM_READWRITE")
-
-# READWRITE is part of ParamFlags since glib 2.42. Only mark PARAM_READWRITE as
-# deprecated in case ParamFlags.READWRITE is available. Also include the glib
-# version in the warning so it's clear that this needs a newer glib, unlike
-# the other ParamFlags related deprecations.
-# https://bugzilla.gnome.org/show_bug.cgi?id=726037
-if hasattr(GObjectModule.ParamFlags, "READWRITE"):
-    deprecated_attr("GObject", "PARAM_READWRITE",
-                    "GObject.ParamFlags.READWRITE (glib 2.42+)")
+PARAM_READWRITE = PARAM_READABLE | PARAM_WRITABLE
+__all__ += ['PARAM_CONSTRUCT', 'PARAM_CONSTRUCT_ONLY', 'PARAM_LAX_VALIDATION',
+            'PARAM_READABLE', 'PARAM_WRITABLE', 'PARAM_READWRITE']
 
 
 # Deprecated, use: GObject.SignalFlags.* directly
-for name in ['SIGNAL_ACTION', 'SIGNAL_DETAILED', 'SIGNAL_NO_HOOKS',
-             'SIGNAL_NO_RECURSE', 'SIGNAL_RUN_CLEANUP', 'SIGNAL_RUN_FIRST',
-             'SIGNAL_RUN_LAST']:
-    new_name = name.split("_", 1)[-1]
-    globals()[name] = getattr(GObjectModule.SignalFlags, new_name)
-    deprecated_attr("GObject", name, "GObject.SignalFlags." + new_name)
-    __all__.append(name)
+SIGNAL_ACTION = GObjectModule.SignalFlags.ACTION
+SIGNAL_DETAILED = GObjectModule.SignalFlags.DETAILED
+SIGNAL_NO_HOOKS = GObjectModule.SignalFlags.NO_HOOKS
+SIGNAL_NO_RECURSE = GObjectModule.SignalFlags.NO_RECURSE
+SIGNAL_RUN_CLEANUP = GObjectModule.SignalFlags.RUN_CLEANUP
+SIGNAL_RUN_FIRST = GObjectModule.SignalFlags.RUN_FIRST
+SIGNAL_RUN_LAST = GObjectModule.SignalFlags.RUN_LAST
+__all__ += ['SIGNAL_ACTION', 'SIGNAL_DETAILED', 'SIGNAL_NO_HOOKS',
+            'SIGNAL_NO_RECURSE', 'SIGNAL_RUN_CLEANUP', 'SIGNAL_RUN_FIRST',
+            'SIGNAL_RUN_LAST']
+
 
 # Static types
 GBoxed = _gobject.GBoxed
@@ -203,13 +198,16 @@ features = _gobject.features
 list_properties = _gobject.list_properties
 new = _gobject.new
 pygobject_version = _gobject.pygobject_version
-threads_init = GLib.threads_init
+threads_init = _gobject.threads_init
 type_register = _gobject.type_register
 __all__ += ['features', 'list_properties', 'new',
             'pygobject_version', 'threads_init', 'type_register']
 
 
 class Value(GObjectModule.Value):
+    def __new__(cls, *args, **kwargs):
+        return GObjectModule.Value.__new__(cls)
+
     def __init__(self, value_type=None, py_value=None):
         GObjectModule.Value.__init__(self)
         if value_type is not None:
@@ -220,18 +218,6 @@ class Value(GObjectModule.Value):
     def __del__(self):
         if self._free_on_dealloc and self.g_type != TYPE_INVALID:
             self.unset()
-
-        # We must call base class __del__() after unset.
-        super(Value, self).__del__()
-
-    def set_boxed(self, boxed):
-        # Workaround the introspection marshalers inability to know
-        # these methods should be marshaling boxed types. This is because
-        # the type information is stored on the GValue.
-        _gobject._gvalue_set(self, boxed)
-
-    def get_boxed(self):
-        return _gobject._gvalue_get(self)
 
     def set_value(self, py_value):
         gtype = self.g_type
@@ -401,36 +387,47 @@ def signal_lookup(name, type_):
 __all__.append('signal_lookup')
 
 
-SignalQuery = namedtuple('SignalQuery',
-                         ['signal_id',
-                          'signal_name',
-                          'itype',
-                          'signal_flags',
-                          'return_type',
-                          # n_params',
-                          'param_types'])
-
-
 def signal_query(id_or_name, type_=None):
+    SignalQuery = namedtuple('SignalQuery',
+                             ['signal_id',
+                              'signal_name',
+                              'itype',
+                              'signal_flags',
+                              'return_type',
+                              # n_params',
+                              'param_types'])
+
+    # signal_query needs to use a static method until the following bugs are fixed:
+    # https://bugzilla.gnome.org/show_bug.cgi?id=687550
+    # https://bugzilla.gnome.org/show_bug.cgi?id=687545
+    # https://bugzilla.gnome.org/show_bug.cgi?id=687541
     if type_ is not None:
         id_or_name = signal_lookup(id_or_name, type_)
 
-    res = GObjectModule.signal_query(id_or_name)
+    res = _gobject.signal_query(id_or_name)
     if res is None:
         return None
 
-    if res.signal_id == 0:
-        return None
-
-    # Return a named tuple to allows indexing which is compatible with the
-    # static bindings along with field like access of the gi struct.
-    # Note however that the n_params was not returned from the static bindings
-    # so we must skip over it.
-    return SignalQuery(res.signal_id, res.signal_name, res.itype,
-                       res.signal_flags, res.return_type,
-                       tuple(res.param_types))
+    # Return a named tuple which allows indexing like the static bindings
+    # along with field like access of the gi struct.
+    # Note however that the n_params was not returned from the static bindings.
+    return SignalQuery(*res)
 
 __all__.append('signal_query')
+
+
+def _get_instance_for_signal(obj):
+    if isinstance(obj, GObjectModule.Object):
+        return obj.__gpointer__
+    else:
+        raise TypeError('Unsupported object "%s" for signal function' % obj)
+
+
+def _wrap_signal_func(func):
+    @functools.wraps(func)
+    def wrapper(obj, *args, **kwargs):
+        return func(_get_instance_for_signal(obj), *args, **kwargs)
+    return wrapper
 
 
 class _HandlerBlockManager(object):
@@ -442,42 +439,60 @@ class _HandlerBlockManager(object):
         pass
 
     def __exit__(self, exc_type, exc_value, traceback):
-        GObjectModule.signal_handler_unblock(self.obj, self.handler_id)
+        signal_handler_unblock(self.obj, self.handler_id)
 
 
 def signal_handler_block(obj, handler_id):
-    """Blocks the signal handler from being invoked until
-    handler_unblock() is called.
+    """Blocks the signal handler from being invoked until handler_unblock() is called.
 
-    :param GObject.Object obj:
-        Object instance to block handlers for.
-    :param int handler_id:
-        Id of signal to block.
-    :returns:
-        A context manager which optionally can be used to
-        automatically unblock the handler:
+    Returns a context manager which optionally can be used to
+    automatically unblock the handler:
 
-    .. code-block:: python
-
-        with GObject.signal_handler_block(obj, id):
-            pass
+    >>> with GObject.signal_handler_block(obj, id):
+    >>>    pass
     """
-    GObjectModule.signal_handler_block(obj, handler_id)
+    GObjectModule.signal_handler_block(_get_instance_for_signal(obj), handler_id)
     return _HandlerBlockManager(obj, handler_id)
 
 __all__.append('signal_handler_block')
 
 
+# The following functions wrap GI functions but coerce the first arg into
+# something compatible with gpointer
+
+signal_handler_unblock = _wrap_signal_func(GObjectModule.signal_handler_unblock)
+signal_handler_disconnect = _wrap_signal_func(GObjectModule.signal_handler_disconnect)
+signal_handler_is_connected = _wrap_signal_func(GObjectModule.signal_handler_is_connected)
+signal_stop_emission = _wrap_signal_func(GObjectModule.signal_stop_emission)
+signal_stop_emission_by_name = _wrap_signal_func(GObjectModule.signal_stop_emission_by_name)
+signal_has_handler_pending = _wrap_signal_func(GObjectModule.signal_has_handler_pending)
+signal_get_invocation_hint = _wrap_signal_func(GObjectModule.signal_get_invocation_hint)
+signal_connect_closure = _wrap_signal_func(GObjectModule.signal_connect_closure)
+signal_connect_closure_by_id = _wrap_signal_func(GObjectModule.signal_connect_closure_by_id)
+signal_handler_find = _wrap_signal_func(GObjectModule.signal_handler_find)
+signal_handlers_destroy = _wrap_signal_func(GObjectModule.signal_handlers_destroy)
+signal_handlers_block_matched = _wrap_signal_func(GObjectModule.signal_handlers_block_matched)
+signal_handlers_unblock_matched = _wrap_signal_func(GObjectModule.signal_handlers_unblock_matched)
+signal_handlers_disconnect_matched = _wrap_signal_func(GObjectModule.signal_handlers_disconnect_matched)
+
+__all__ += ['signal_handler_unblock',
+            'signal_handler_disconnect', 'signal_handler_is_connected',
+            'signal_stop_emission', 'signal_stop_emission_by_name',
+            'signal_has_handler_pending', 'signal_get_invocation_hint',
+            'signal_connect_closure', 'signal_connect_closure_by_id',
+            'signal_handler_find', 'signal_handlers_destroy',
+            'signal_handlers_block_matched', 'signal_handlers_unblock_matched',
+            'signal_handlers_disconnect_matched']
+
+
 def signal_parse_name(detailed_signal, itype, force_detail_quark):
     """Parse a detailed signal name into (signal_id, detail).
 
-    :param str detailed_signal:
-        Signal name which can include detail.
-        For example: "notify:prop_name"
-    :returns:
-        Tuple of (signal_id, detail)
-    :raises ValueError:
+    :Raises ValueError:
         If the given signal is unknown.
+
+    :Returns:
+        Tuple of (signal_id, detail)
     """
     res, signal_id, detail = GObjectModule.signal_parse_name(detailed_signal, itype,
                                                              force_detail_quark)
@@ -530,16 +545,6 @@ class _FreezeNotifyManager(object):
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.obj.thaw_notify()
-
-
-def _signalmethod(func):
-    # Function wrapper for signal functions used as instance methods.
-    # This is needed when the signal functions come directly from GI.
-    # (they are not already wrapped)
-    @gi.overrides.wraps(func)
-    def meth(*args, **kwargs):
-        return func(*args, **kwargs)
-    return meth
 
 
 class Object(GObjectModule.Object):
@@ -605,68 +610,28 @@ class Object(GObjectModule.Object):
     def freeze_notify(self):
         """Freezes the object's property-changed notification queue.
 
-        :returns:
-            A context manager which optionally can be used to
-            automatically thaw notifications.
-
         This will freeze the object so that "notify" signals are blocked until
         the thaw_notify() method is called.
 
-        .. code-block:: python
+        Returns a context manager which optionally can be used to
+        automatically thaw notifications:
 
-            with obj.freeze_notify():
-                pass
+        >>> with obj.freeze_notify():
+        >>>     pass
         """
         super(Object, self).freeze_notify()
         return _FreezeNotifyManager(self)
-
-    def connect_data(self, detailed_signal, handler, *data, **kwargs):
-        """Connect a callback to the given signal with optional user data.
-
-        :param str detailed_signal:
-            A detailed signal to connect to.
-        :param callable handler:
-            Callback handler to connect to the signal.
-        :param *data:
-            Variable data which is passed through to the signal handler.
-        :param GObject.ConnectFlags connect_flags:
-            Flags used for connection options.
-        :returns:
-            A signal id which can be used with disconnect.
-        """
-        flags = kwargs.get('connect_flags', 0)
-        if flags & GObjectModule.ConnectFlags.AFTER:
-            connect_func = _gobject.GObject.connect_after
-        else:
-            connect_func = _gobject.GObject.connect
-
-        if flags & GObjectModule.ConnectFlags.SWAPPED:
-            if len(data) != 1:
-                raise ValueError('Using GObject.ConnectFlags.SWAPPED requires exactly '
-                                 'one argument for user data, got: %s' % [data])
-
-            def new_handler(obj, *args):
-                # Swap obj with the last element in args which will be the user
-                # data passed to the connect function.
-                args = list(args)
-                swap = args.pop()
-                args = args + [obj]
-                return handler(swap, *args)
-        else:
-            new_handler = handler
-
-        return connect_func(self, detailed_signal, new_handler, *data)
 
     #
     # Aliases
     #
 
+    disconnect = signal_handler_disconnect
     handler_block = signal_handler_block
-    handler_unblock = _signalmethod(GObjectModule.signal_handler_unblock)
-    disconnect = _signalmethod(GObjectModule.signal_handler_disconnect)
-    handler_disconnect = _signalmethod(GObjectModule.signal_handler_disconnect)
-    handler_is_connected = _signalmethod(GObjectModule.signal_handler_is_connected)
-    stop_emission_by_name = _signalmethod(GObjectModule.signal_stop_emission_by_name)
+    handler_unblock = signal_handler_unblock
+    handler_disconnect = signal_handler_disconnect
+    handler_is_connected = signal_handler_is_connected
+    stop_emission_by_name = signal_stop_emission_by_name
 
     #
     # Deprecated Methods
@@ -675,7 +640,7 @@ class Object(GObjectModule.Object):
     def stop_emission(self, detailed_signal):
         """Deprecated, please use stop_emission_by_name."""
         warnings.warn(self.stop_emission.__doc__, PyGIDeprecationWarning, stacklevel=2)
-        return self.stop_emission_by_name(detailed_signal)
+        return signal_stop_emission_by_name(self, detailed_signal)
 
     emit_stop_by_name = stop_emission
 
@@ -685,30 +650,10 @@ GObject = Object
 __all__ += ['Object', 'GObject']
 
 
-class Binding(GObjectModule.Binding):
-    def __call__(self):
-        warnings.warn('Using parentheses (binding()) to retrieve the Binding object is no '
-                      'longer needed because the binding is returned directly from "bind_property.',
-                      PyGIDeprecationWarning, stacklevel=2)
-        return self
-
-    def unbind(self):
-        if hasattr(self, '_unbound'):
-            raise ValueError('binding has already been cleared out')
-        else:
-            setattr(self, '_unbound', True)
-            super(Binding, self).unbind()
-
-
-Binding = override(Binding)
-__all__.append('Binding')
-
-
 Property = propertyhelper.Property
 Signal = signalhelper.Signal
 SignalOverride = signalhelper.SignalOverride
 # Deprecated naming "property" available for backwards compatibility.
 # Keep this at the end of the file to avoid clobbering the builtin.
 property = Property
-deprecated_attr("GObject", "property", "GObject.Property")
 __all__ += ['Property', 'Signal', 'SignalOverride', 'property']

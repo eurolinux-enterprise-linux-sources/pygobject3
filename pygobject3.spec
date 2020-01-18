@@ -1,38 +1,93 @@
-# Last updated for version 3.18.0
-%define glib2_version                  2.38.0
-%define gobject_introspection_version  1.46.0
-%define python2_version                2.7
+# Last updated for version 3.7.5.1
+%define glib2_version                  2.35.7
+%define gobject_introspection_version  1.34.2
+%define python2_version                2.3.5
 
 %if 0%{?fedora} > 12
 %global with_python3 1
 %define python3_version                3.1
 %endif
 
-%global with_check 0
+%if 1
+  # Verbose build
+  %global verbosity V=1
+%else
+  # Quiet build
+  %global verbosity %{nil}
+%endif
 
-Name:           pygobject3
-Version:        3.22.0
-Release:        1%{?dist}.1
-Summary:        Python bindings for GObject Introspection
+%global with_check 1
 
-License:        LGPLv2+ and MIT
-URL:            https://wiki.gnome.org/Projects/PyGObject
-Source0:        https://download.gnome.org/sources/pygobject/3.22/pygobject-%{version}.tar.xz
+### Abstract ###
 
-# https://bugzilla.redhat.com/1247996
-# which reverts https://bugzilla.gnome.org/709183
-Patch1:         pygobject-3.22.0-allow-static-module-import.patch
+Name: pygobject3
+Version: 3.8.2
+Release: 4%{?dist}
+License: LGPLv2+ and MIT
+Group: Development/Languages
+Summary: Python 2 bindings for GObject Introspection
+URL: https://live.gnome.org/PyGObject
+#VCS: git:git://git.gnome.org/pygobject
+Source: http://ftp.gnome.org/pub/GNOME/sources/pygobject/3.8/pygobject-%{version}.tar.xz
 
-BuildRequires:  glib2-devel >= %{glib2_version}
-BuildRequires:  gobject-introspection-devel >= %{gobject_introspection_version}
-BuildRequires:  python2-devel >= %{python2_version}
+# Add these additional exclusions to the pep8 rules in "make check":
+#   E127 continuation line over-indented for visual indent
+# Not yet sent upstream
+Patch1: ignore-more-pep8-errors.patch
+
+# Mark some tests as known to fail; currently:
+#
+# On i686:
+#  ======================================================================
+#  FAIL: test_strv (test_gi.TestPropertiesObject)
+#  ----------------------------------------------------------------------
+#  Traceback (most recent call last):
+#    File "/builddir/build/BUILD/pygobject-3.3.4/tests/test_gi.py", line 2205, in test_strv
+#      self.assertEqual(self.obj.props.some_strv, ['hello', 'world'])
+#  AssertionError: Lists differ: ['hello'] != ['hello', 'world']
+#  Second list contains 1 additional elements.
+#  First extra element 1:
+#  world
+#  - ['hello']
+#  + ['hello', 'world']
+#  ----------------------------------------------------------------------
+#
+# Intermittently:
+#  ======================================================================
+#  FAIL: test_python_calls_sync (test_gdbus.TestGDBusClient)
+#  ----------------------------------------------------------------------
+#  Traceback (most recent call last):
+#    File "/builddir/build/BUILD/pygobject-3.3.4/tests/test_gdbus.py", line 140, in test_python_calls_sync
+#      self.assertTrue('Timeout' in str(e), str(e))
+#  AssertionError: GDBus.Error:org.freedesktop.DBus.Error.NameHasNoOwner: Could not get PID of name '1': no such name
+#  ----------------------------------------------------------------------
+#
+# Not yet sent upstream
+Patch2: pygobject-3.3.4-known-failures.patch
+
+# Add regression test for rhbz#842880
+# Not yet sent upstream:
+Patch3: test-list-marshalling.patch
+
+# Disable a test that still fails on ppc64 (see
+#   https://bugzilla.redhat.com/show_bug.cgi?id=924425#c7 )
+# Filed upstream as:
+#  https://bugzilla.gnome.org/show_bug.cgi?id=697138
+Patch5: pygobject-3.8.0-known-failures.txt
+
+### Build Dependencies ###
+
+BuildRequires: chrpath
+BuildRequires: glib2-devel >= %{glib2_version}
+BuildRequires: gobject-introspection-devel >= %{gobject_introspection_version}
+BuildRequires: python2-devel >= %{python2_version}
 %if 0%{?with_python3}
-BuildRequires:  python3-devel >= %{python3_version}
-BuildRequires:  python3-cairo-devel
+BuildRequires: python3-devel >= %{python3_version}
+BuildRequires: python3-cairo-devel
 %endif # if with_python3
 
-BuildRequires:  cairo-gobject-devel
-BuildRequires:  pycairo-devel
+BuildRequires: cairo-gobject-devel
+BuildRequires: pycairo-devel
 
 # Required by the upstream selftest suite:
 %if %{with_check}
@@ -40,87 +95,71 @@ BuildRequires:  pycairo-devel
 # Temporarily disabled pyflakes tests to avoid the build failing due to too new
 # pyflakes 0.7.2 in F19
 # https://bugzilla.gnome.org/show_bug.cgi?id=701009
-#BuildRequires:  pyflakes
-BuildRequires:  python-pep8
+#BuildRequires: pyflakes
+BuildRequires: python-pep8
 %endif
 ## for the Gdk and Gtk typelibs, used during the test suite:
-BuildRequires:  gtk3
+BuildRequires: gtk3
 ## for xvfb-run:
-BuildRequires:  xorg-x11-server-Xvfb
-BuildRequires:  dejavu-sans-fonts
-BuildRequires:  dejavu-sans-mono-fonts
-BuildRequires:  dejavu-serif-fonts
+BuildRequires: xorg-x11-server-Xvfb
+BuildRequires: dejavu-sans-fonts
+BuildRequires: dejavu-sans-mono-fonts
+BuildRequires: dejavu-serif-fonts
 ## for dbus-launch, used by test_gdbus:
-BuildRequires:  dbus-x11
+BuildRequires: dbus-x11
 %endif # with_check
+
+Requires: %{name}-base = %{version}-%{release}
+
+# The cairo override module depends on this
+Requires: pycairo
 
 %description
 The %{name} package provides a convenient wrapper for the GObject library
 for use in Python programs.
 
-%package     -n python-gobject
-Summary:        Python 2 bindings for GObject Introspection
-Requires:       python-gobject-base%{?_isa} = %{version}-%{release}
-# The cairo override module depends on this
-Requires:       pycairo%{?_isa}
+%package base
+Summary: Python 2 bindings for GObject Introspection base package
+Group: Development/Languages
+Requires: gobject-introspection >= %{gobject_introspection_version}
 
-Obsoletes:      %{name} < 3.17.90-2
-Provides:       %{name} = %{version}-%{release}
-Provides:       %{name}%{?_isa} = %{version}-%{release}
-
-%description -n python-gobject
-The python-gobject package provides a convenient wrapper for the GObject
-library and and other libraries that are compatible with GObject Introspection,
-for use in Python 2 programs.
-
-%package     -n python-gobject-base
-Summary:        Python 2 bindings for GObject Introspection base package
-Requires:       gobject-introspection%{?_isa} >= %{gobject_introspection_version}
-
-Obsoletes:      %{name}-base < 3.17.90-2
-Provides:       %{name}-base = %{version}-%{release}
-Provides:       %{name}-base%{?_isa} = %{version}-%{release}
-
-%description -n python-gobject-base
+%description base
 This package provides the non-cairo specific bits of the GObject Introspection
 library.
 
+%package devel
+Summary: Development files for embedding PyGObject introspection support
+Group: Development/Languages
+Requires: %{name} = %{version}-%{release}
+Requires: glib2-devel
+Requires: gobject-introspection-devel
+Requires: pkgconfig
+
+%description devel
+This package contains files required to embed PyGObject
+
 %if 0%{?with_python3}
-%package     -n python3-gobject
-Summary:        Python 3 bindings for GObject Introspection
-Requires:       python3-gobject-base%{?_isa} = %{version}-%{release}
+%package -n python3-gobject
+Summary: Python 3 bindings for GObject Introspection
+Group: Development/Languages
+
 # The cairo override module depends on this
-Requires:       python3-cairo%{?_isa}
+Requires: python3-cairo
+Requires: gobject-introspection >= %{gobject_introspection_version}
 
 %description -n python3-gobject
 The python3-gobject package provides a convenient wrapper for the GObject 
 library and and other libraries that are compatible with GObject Introspection, 
 for use in Python 3 programs.
 
-%package     -n python3-gobject-base
-Summary:        Python 3 bindings for GObject Introspection base package
-Requires:       gobject-introspection%{?_isa} >= %{gobject_introspection_version}
-
-%description -n python3-gobject-base
-This package provides the non-cairo specific bits of the GObject Introspection
-library.
-
 %endif # with_python3
-
-%package        devel
-Summary:        Development files for embedding PyGObject introspection support
-Requires:       python-gobject%{?_isa} = %{version}-%{release}
-%if 0%{?with_python3}
-Requires:       python3-gobject%{?_isa} = %{version}-%{release}
-%endif
-Requires:       gobject-introspection-devel%{?_isa}
-
-%description    devel
-This package contains files required to embed PyGObject
 
 %prep
 %setup -q -n pygobject-%{version}
-%patch1 -p1 -b .allow-static-module-import
+%patch1 -p1 -b .ignore-more-pep8-errors
+%patch2 -p1 -b .known-failures
+%patch3 -p1 -b .test-list-marshalling
+%patch5 -p1
 
 %if 0%{?with_python3}
 rm -rf %{py3dir}
@@ -134,14 +173,14 @@ find -name '*.py' | xargs sed -i '1s|^#!python|#!%{__python}|'
 PYTHON=%{__python} 
 export PYTHON
 %configure
-make %{?_smp_mflags} V=1
+make %{?_smp_mflags} %{verbosity}
 
 %if 0%{?with_python3}
 pushd %{py3dir}
 PYTHON=%{__python3}
 export PYTHON
 %configure
-make %{?_smp_mflags} V=1
+make %{_smp_mflags} %{verbosity}
 popd
 %endif # with_python3
 
@@ -150,13 +189,18 @@ popd
 pushd %{py3dir}
 PYTHON=%{__python3}
 export PYTHON
-%make_install
+make DESTDIR=$RPM_BUILD_ROOT install %{verbosity}
 popd
+
+chrpath --delete $RPM_BUILD_ROOT%{python3_sitearch}/gi/{*.so,*/*.so}
 
 %endif # with_python3
 
-%make_install
+make DESTDIR=$RPM_BUILD_ROOT install %{verbosity}
 find $RPM_BUILD_ROOT -name '*.la' -delete
+find $RPM_BUILD_ROOT -name '*.a' -delete
+
+chrpath --delete $RPM_BUILD_ROOT%{python_sitearch}/gi/{*.so,*/*.so}
 
 # Don't include makefiles in the installed docs, in order to avoid creating
 # multilib conflicts
@@ -166,6 +210,7 @@ cp -a examples _docs
 rm _docs/examples/Makefile*
 
 %check
+
 %if %{with_check}
 # Run the selftests under a temporary xvfb X server (so that they can
 # initialize Gdk etc):
@@ -180,158 +225,66 @@ rm _docs/examples/Makefile*
 pushd %{py3dir}
 PYTHON=%{__python3}
 export PYTHON
-xvfb-run make DESTDIR=$RPM_BUILD_ROOT check V=1
+xvfb-run make DESTDIR=$RPM_BUILD_ROOT check %{verbosity}
 popd
 %endif # with_python3
 
-xvfb-run make DESTDIR=$RPM_BUILD_ROOT check V=1
+xvfb-run make DESTDIR=$RPM_BUILD_ROOT check %{verbosity}
 
 %endif # with_check
 
-%files -n python-gobject
+%post -p /sbin/ldconfig
+
+%postun -p /sbin/ldconfig
+
+%files
+%defattr(644, root, root, 755)
 %{python_sitearch}/gi/_gi_cairo.so
 
-%files -n python-gobject-base
-%license COPYING
-%doc AUTHORS NEWS README
+%files base
+%defattr(644, root, root, 755)
+%doc AUTHORS NEWS README COPYING
+%{_libdir}/libpyglib-gi-2.0-python.so*
 %dir %{python_sitearch}/gi
 %{python_sitearch}/gi/*
 %exclude %{python_sitearch}/gi/_gi_cairo.so
 %{python_sitearch}/pygobject-*.egg-info
 %{python_sitearch}/pygtkcompat/
 
-%if 0%{?with_python3}
-%files -n python3-gobject
-%{python3_sitearch}/gi/_gi_cairo*.so
-
-%files -n python3-gobject-base
-%license COPYING
-%doc AUTHORS NEWS README
-%dir %{python3_sitearch}/gi
-%{python3_sitearch}/gi/*
-%exclude %{python3_sitearch}/gi/_gi_cairo*.so
-%{python3_sitearch}/pygobject-*.egg-info
-%{python3_sitearch}/pygtkcompat/
-%endif # with_python3
-
 %files devel
+%defattr(644, root, root, 755)
 %doc _docs/*
 %dir %{_includedir}/pygobject-3.0/
 %{_includedir}/pygobject-3.0/pygobject.h
 %{_libdir}/pkgconfig/pygobject-3.0.pc
 
+%if 0%{?with_python3}
+%files -n python3-gobject
+%defattr(644, root, root, 755)
+%doc AUTHORS NEWS README COPYING
+%{_libdir}/libpyglib-gi-2.0-python3.so*
+%dir %{python3_sitearch}/gi
+%{python3_sitearch}/gi/*
+%{python3_sitearch}/pygobject-*.egg-info
+%{python3_sitearch}/pygtkcompat/
+
+%endif # with_python3
+
 %changelog
-* Thu Nov 09 2017 John Francini - 3.22.0-1.1
-- Bump release to allow rebuild to fix BZ#1510160
+* Fri Jan 24 2014 Daniel Mach <dmach@redhat.com> - 3.8.2-4
+- Mass rebuild 2014-01-24
 
-* Mon Sep 19 2016 Kalev Lember <klember@redhat.com> - 3.22.0-1
-- Update to 3.22.0
-- Resolves: #1387039
+* Fri Dec 27 2013 Daniel Mach <dmach@redhat.com> - 3.8.2-3
+- Mass rebuild 2013-12-27
 
-* Tue Sep 15 2015 Matthew Barnes <mbarnes@redhat.com> - 3.14.0-3
-- Allow importing static modules to fix RHEL7 rebase regressions
+* Thu Sep  5 2013 Paul W. Frields <pfrields@redhat.com> - 3.8.2-2.1
+- Rebuild for ppc64 (rhbz #978762)
 
-* Fri May 22 2015 Rui Matos <rmatos@redhat.com> - 3.14.0-2
-- Add patch to fix a coverity issue
-  https://bugzilla.gnome.org/show_bug.cgi?id=749698
-
-* Mon Sep 22 2014 Kalev Lember <kalevlember@gmail.com> - 3.14.0-1
-- Update to 3.14.0
-
-* Tue Sep 16 2014 Kalev Lember <kalevlember@gmail.com> - 3.13.92-1
-- Update to 3.13.92
-
-* Tue Sep 02 2014 Kalev Lember <kalevlember@gmail.com> - 3.13.91-1
-- Update to 3.13.91
-
-* Thu Aug 21 2014 Kalev Lember <kalevlember@gmail.com> - 3.13.90-2
-- Backport a fix for virt-manager crash (#1130758)
-
-* Tue Aug 19 2014 Kalev Lember <kalevlember@gmail.com> - 3.13.90-1
-- Update to 3.13.90
-
-* Sun Aug 17 2014 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 3.13.4-2
-- Rebuilt for https://fedoraproject.org/wiki/Fedora_21_22_Mass_Rebuild
-
-* Fri Aug 15 2014 Kalev Lember <kalevlember@gmail.com> - 3.13.4-1
-- Update to 3.13.4
-
-* Tue Jun 24 2014 Richard Hughes <rhughes@redhat.com> - 3.13.3-1
-- Update to 3.13.3
-
-* Sat Jun 07 2014 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 3.13.2-2
-- Rebuilt for https://fedoraproject.org/wiki/Fedora_21_Mass_Rebuild
-
-* Mon May 26 2014 Kalev Lember <kalevlember@gmail.com> - 3.13.2-1
-- Update to 3.13.2
-- Drop old testsuite patches
-
-* Mon May 12 2014 Bohuslav Kabrda <bkabrda@redhat.com> - 3.13.1-2
-- Rebuilt for https://fedoraproject.org/wiki/Changes/Python_3.4
-
-* Tue Apr 29 2014 Richard Hughes <rhughes@redhat.com> - 3.13.1-1
-- Update to 3.13.1
-
-* Tue Apr 15 2014 Kalev Lember <kalevlember@gmail.com> - 3.12.1-1
-- Update to 3.12.1
-
-* Sat Apr 05 2014 Kalev Lember <kalevlember@gmail.com> - 3.12.0-2
-- Update dep versions
-- Tighten deps with %%_isa
-
-* Mon Mar 24 2014 Richard Hughes <rhughes@redhat.com> - 3.12.0-1
-- Update to 3.12.0
-
-* Tue Mar 18 2014 Richard Hughes <rhughes@redhat.com> - 3.11.92-1
-- Update to 3.11.92
-
-* Tue Mar 04 2014 Richard Hughes <rhughes@redhat.com> - 3.11.91-1
-- Update to 3.11.91
-
-* Tue Feb 18 2014 Richard Hughes <rhughes@redhat.com> - 3.11.90-1
-- Update to 3.11.90
-
-* Wed Feb 05 2014 Richard Hughes <rhughes@redhat.com> - 3.11.5-1
-- Update to 3.11.5
-
-* Tue Jan 14 2014 Richard Hughes <rhughes@redhat.com> - 3.11.4-1
-- Update to 3.11.4
-
-* Tue Dec 17 2013 Richard Hughes <rhughes@redhat.com> - 3.11.3-1
-- Update to 3.11.3
-
-* Mon Nov 18 2013 Richard Hughes <rhughes@redhat.com> - 3.11.2-1
-- Update to 3.11.2
-
-* Tue Oct 29 2013 Richard Hughes <rhughes@redhat.com> - 3.11.1-1
-- Update to 3.11.1
-
-* Wed Sep 25 2013 Kalev Lember <kalevlember@gmail.com> - 3.10.0-1
-- Update to 3.10.0
-
-* Wed Sep 18 2013 Kalev Lember <kalevlember@gmail.com> - 3.9.92-1
-- Update to 3.9.92
-
-* Tue Sep 03 2013 Kalev Lember <kalevlember@gmail.com> - 3.9.91-1
-- Update to 3.9.91
-
-* Thu Aug 22 2013 Kalev Lember <kalevlember@gmail.com> - 3.9.90-1
-- Update to 3.9.90
-
-* Fri Aug  9 2013 Daniel Drake <dsd@laptop.org> - 3.9.5-1
-- Update to 3.9.5
-
-* Sun Aug 04 2013 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 3.9.2-2
-- Rebuilt for https://fedoraproject.org/wiki/Fedora_20_Mass_Rebuild
-
-* Sun Jun 02 2013 Kalev Lember <kalevlember@gmail.com> - 3.9.2-1
-- Update to 3.9.2
-
-* Sun Jun 02 2013 Kalev Lember <kalevlember@gmail.com> - 3.9.1-2
+* Sun Jun 02 2013 Kalev Lember <kalevlember@gmail.com> - 3.8.2-2
 - Disable pyflakes tests to avoid failures with too new pyflakes 0.7.2
 
-* Fri May 10 2013 Richard Hughes <rhughes@redhat.com> - 3.9.1-1
-- Update to 3.9.1
+* Mon May 13 2013 Richard Hughes <rhughes@redhat.com> - 3.8.2-1
+- Update to 3.8.2
 
 * Thu Apr 25 2013 Peter Robinson <pbrobinson@fedoraproject.org> 3.8.1-2
 - Add upstream patch to fix Sugar (RHBZ 947538)

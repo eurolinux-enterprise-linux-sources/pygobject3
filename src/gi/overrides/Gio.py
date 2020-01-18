@@ -18,7 +18,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301
 # USA
 
-from ..overrides import override, deprecated_init
+from ..overrides import override
 from ..module import get_introspection_module
 
 from gi.repository import GLib
@@ -63,8 +63,8 @@ __all__.append('MenuItem')
 class Settings(Gio.Settings):
     '''Provide dictionary-like access to GLib.Settings.'''
 
-    __init__ = deprecated_init(Gio.Settings.__init__,
-                               arg_names=('schema', 'path', 'backend'))
+    def __init__(self, schema, path=None, backend=None, **kwargs):
+        Gio.Settings.__init__(self, schema=schema, backend=backend, path=path, **kwargs)
 
     def __contains__(self, key):
         return key in self.list_keys()
@@ -82,14 +82,14 @@ class Settings(Gio.Settings):
 
     def __getitem__(self, key):
         # get_value() aborts the program on an unknown key
-        if key not in self:
+        if not key in self:
             raise KeyError('unknown key: %r' % (key,))
 
         return self.get_value(key).unpack()
 
     def __setitem__(self, key, value):
         # set_value() aborts the program on an unknown key
-        if key not in self:
+        if not key in self:
             raise KeyError('unknown key: %r' % (key,))
 
         # determine type string of this key

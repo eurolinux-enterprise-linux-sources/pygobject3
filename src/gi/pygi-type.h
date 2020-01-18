@@ -14,20 +14,21 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see <http://www.gnu.org/licenses/>.
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
+ * USA
  */
 
 #ifndef __PYGI_TYPE_H__
 #define __PYGI_TYPE_H__
 
 #include <Python.h>
-#include <girepository.h>
 
 G_BEGIN_DECLS
 
 /* Public */
 
-PyObject *pygi_type_import_by_g_type (GType g_type);
+PyObject *pygi_type_import_by_g_type_real (GType g_type);
 
 
 /* Private */
@@ -37,6 +38,8 @@ PyObject *_pygi_type_import_by_name (const char *namespace_, const char *name);
 PyObject *_pygi_type_import_by_gi_info (GIBaseInfo *info);
 
 PyObject *_pygi_type_get_from_g_type (GType g_type);
+
+PyObject *_pygi_get_py_type_hint (GITypeTag type_tag);
 
 G_END_DECLS
 

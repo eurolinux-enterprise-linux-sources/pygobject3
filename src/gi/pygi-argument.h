@@ -14,7 +14,9 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see <http://www.gnu.org/licenses/>.
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
+ * USA
  */
 
 #ifndef __PYGI_ARGUMENT_H__
@@ -28,24 +30,28 @@ G_BEGIN_DECLS
 
 
 /* Private */
-typedef gssize (*PyGIArgArrayLengthPolicy) (gsize item_index,
-                                            void *user_data1,
-                                            void *user_data2);
-
-gssize _pygi_argument_array_length_marshal (gsize length_arg_index,
-                                            void *user_data1,
-                                            void *user_data2);
-
 gpointer _pygi_arg_to_hash_pointer (const GIArgument *arg,
-                                    GITypeInfo       *type_info);
+                                    GITypeTag         type_tag);
 
 void _pygi_hash_pointer_to_arg (GIArgument *arg,
-                                GITypeInfo *type_info);
+                                GITypeTag   type_tag);
+
+gint _pygi_g_type_interface_check_object (GIBaseInfo *info,
+                                          PyObject   *object);
+
+gint _pygi_g_type_info_check_object (GITypeInfo *type_info,
+                                     PyObject   *object,
+                                     gboolean   allow_none);
+
+gint _pygi_g_registered_type_info_check_object (GIRegisteredTypeInfo *info,
+                                                gboolean              is_instance,
+                                                PyObject             *object);
+
 
 GArray* _pygi_argument_to_array (GIArgument  *arg,
-                                 PyGIArgArrayLengthPolicy array_length_policy,
-                                 void        *user_data1,
-                                 void        *user_data2,
+                                 GIArgument  *args[],
+                                 const GValue *args_values,
+                                 GICallableInfo *callable_info,
                                  GITypeInfo  *type_info,
                                  gboolean    *out_free_array);
 
@@ -57,14 +63,15 @@ PyObject* _pygi_argument_to_object (GIArgument  *arg,
                                     GITypeInfo *type_info,
                                     GITransfer  transfer);
 
+GIArgument _pygi_argument_from_g_value(const GValue *value,
+                                       GITypeInfo *type_info);
+
 void _pygi_argument_release (GIArgument   *arg,
                              GITypeInfo  *type_info,
                              GITransfer   transfer,
                              GIDirection  direction);
 
-gboolean pygi_argument_to_gssize (GIArgument *arg_in,
-                                  GITypeTag  type_tag,
-                                  gssize *gssize_out);
+void _pygi_argument_init (void);
 
 G_END_DECLS
 

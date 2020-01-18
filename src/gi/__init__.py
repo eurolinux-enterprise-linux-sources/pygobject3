@@ -24,51 +24,22 @@ from __future__ import absolute_import
 from pkgutil import extend_path
 __path__ = extend_path(__path__, __name__)
 
-import sys
-import os
-import importlib
-import types
+from ._gi import _API, Repository
 
-_static_binding_error = ('When using gi.repository you must not import static '
-                         'modules like "gobject". Please change all occurrences '
-                         'of "import gobject" to "from gi.repository import GObject". '
-                         'See: https://bugzilla.gnome.org/show_bug.cgi?id=709183')
-
-# we can't have pygobject 2 loaded at the same time we load the internal _gobject
-if 'gobject' in sys.modules:
-    raise ImportError(_static_binding_error)
-
-
-from . import _gi
-from ._gi import _gobject
-from ._gi import _API
-from ._gi import Repository
-from ._gi import PyGIDeprecationWarning
-from ._gi import PyGIWarning
+# Force loading the GObject typelib so we have available the wrappers for
+# base classes such as GInitiallyUnowned
+import gi._gobject
+gi  # pyflakes
 
 _API = _API  # pyflakes
-PyGIDeprecationWarning = PyGIDeprecationWarning
-PyGIWarning = PyGIWarning
+
+import os
 
 _versions = {}
 _overridesdir = os.path.join(os.path.dirname(__file__), 'overrides')
 
-version_info = _gobject.pygobject_version[:]
+version_info = gi._gobject.pygobject_version[:]
 __version__ = "{0}.{1}.{2}".format(*version_info)
-
-
-class _DummyStaticModule(types.ModuleType):
-    __path__ = None
-
-    def __getattr__(self, name):
-        raise AttributeError(_static_binding_error)
-
-
-sys.modules['glib'] = _DummyStaticModule('glib', _static_binding_error)
-sys.modules['gobject'] = _DummyStaticModule('gobject', _static_binding_error)
-sys.modules['gio'] = _DummyStaticModule('gio', _static_binding_error)
-sys.modules['gtk'] = _DummyStaticModule('gtk', _static_binding_error)
-sys.modules['gtk.gdk'] = _DummyStaticModule('gtk.gdk', _static_binding_error)
 
 
 def check_version(version):
@@ -85,22 +56,6 @@ def check_version(version):
 
 
 def require_version(namespace, version):
-    """ Ensures the correct versions are loaded when importing `gi` modules.
-
-    :param namespace: The name of module to require.
-    :type namespace: str
-    :param version: The version of module to require.
-    :type version: str
-    :raises ValueError: If module/version is already loaded, already required, or unavailable.
-
-    :Example:
-
-    .. code-block:: python
-
-        import gi
-        gi.require_version('Gtk', '3.0')
-
-    """
     repository = Repository.get_default()
 
     if namespace in repository.get_loaded_namespaces():
@@ -124,48 +79,19 @@ def require_version(namespace, version):
     _versions[namespace] = version
 
 
-def require_versions(requires):
-    """ Utility function for consolidating multiple `gi.require_version()` calls.
-
-    :param requires: The names and versions of modules to require.
-    :type requires: dict
-
-    :Example:
-
-    .. code-block:: python
-
-        import gi
-        gi.require_versions({'Gtk': '3.0', 'GLib': '2.0', 'Gio': '2.0'})
-    """
-    for module_name, module_version in requires.items():
-        require_version(module_name, module_version)
-
-
 def get_required_version(namespace):
     return _versions.get(namespace, None)
 
 
-def require_foreign(namespace, symbol=None):
-    """Ensure the given foreign marshaling module is available and loaded.
+# Use RuntimeWarning as the base class of PyGIDeprecationWarning
+# for unstable (odd minor version) and use DeprecationWarning for
+# stable (even minor version). This is so PyGObject deprecations
+# behave the same as regular Python deprecations in stable releases.
+if version_info[1] % 2:
+    _DeprecationWarningBase = RuntimeWarning
+else:
+    _DeprecationWarningBase = DeprecationWarning
 
-    :param str namespace:
-        Introspection namespace of the foreign module (e.g. "cairo")
-    :param symbol:
-        Optional symbol typename to ensure a converter exists.
-    :type symbol: str or None
-    :raises: ImportError
 
-    :Example:
-
-    .. code-block:: python
-
-        import gi
-        import cairo
-        gi.require_foreign('cairo')
-
-    """
-    try:
-        _gi.require_foreign(namespace, symbol)
-    except Exception as e:
-        raise ImportError(str(e))
-    importlib.import_module('gi.repository', namespace)
+class PyGIDeprecationWarning(_DeprecationWarningBase):
+    pass

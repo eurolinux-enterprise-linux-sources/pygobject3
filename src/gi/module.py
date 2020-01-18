@@ -23,7 +23,7 @@
 from __future__ import absolute_import
 
 import sys
-import importlib
+import types
 
 _have_py3 = (sys.version_info[0] >= 3)
 
@@ -34,6 +34,7 @@ except AttributeError:
     from string import maketrans
 
 import gi
+from .overrides import registry
 
 from ._gi import \
     Repository, \
@@ -52,15 +53,17 @@ from ._gi import \
     enum_add, \
     enum_register_new_gtype_and_add, \
     flags_add, \
-    flags_register_new_gtype_and_add, \
-    _gobject
+    flags_register_new_gtype_and_add
 from .types import \
     GObjectMeta, \
-    StructMeta
+    StructMeta, \
+    Function
 
-GInterface = _gobject.GInterface
+from ._gobject._gobject import \
+    GInterface, \
+    GObject
 
-from ._constants import \
+from ._gobject.constants import \
     TYPE_NONE, \
     TYPE_BOXED, \
     TYPE_POINTER, \
@@ -78,22 +81,16 @@ def get_parent_for_object(object_info):
     parent_object_info = object_info.get_parent()
 
     if not parent_object_info:
-        # If we reach the end of the introspection info class hierarchy, look
-        # for an existing wrapper on the GType and use it as a base for the
-        # new introspection wrapper. This allows static C wrappers already
-        # registered with the GType to be used as the introspection base
-        # (_gobject.GObject for example)
-        gtype = object_info.get_g_type()
-        if gtype and gtype.pytype:
-            return gtype.pytype
+        # Special case GObject.Object as being derived from the static GObject.
+        if object_info.get_namespace() == 'GObject' and object_info.get_name() == 'Object':
+            return GObject
 
-        # Otherwise use builtins.object as the base
         return object
 
     namespace = parent_object_info.get_namespace()
     name = parent_object_info.get_name()
 
-    module = importlib.import_module('gi.repository.' + namespace)
+    module = __import__('gi.repository.%s' % namespace, fromlist=[name])
     return getattr(module, name)
 
 
@@ -103,7 +100,7 @@ def get_interfaces_for_object(object_info):
         namespace = interface_info.get_namespace()
         name = interface_info.get_name()
 
-        module = importlib.import_module('gi.repository.' + namespace)
+        module = __import__('gi.repository.%s' % namespace, fromlist=[name])
         interfaces.append(getattr(module, name))
     return interfaces
 
@@ -117,13 +114,12 @@ class IntrospectionModule(object):
     These members are then cached on this introspection module.
     """
     def __init__(self, namespace, version=None):
-        """Might raise gi._gi.RepositoryError"""
-
         repository.require(namespace, version)
         self._namespace = namespace
         self._version = version
         self.__name__ = 'gi.repository.' + namespace
 
+        repository.require(self._namespace, self._version)
         self.__path__ = repository.get_typelib_path(self._namespace)
         if _have_py3:
             # get_typelib_path() delivers bytes, not a string
@@ -168,8 +164,6 @@ class IntrospectionModule(object):
                 for value_info in info.get_values():
                     value_name = value_info.get_name_unescaped().translate(ascii_upper_trans)
                     setattr(wrapper, value_name, wrapper(value_info.get_value()))
-                for method_info in info.get_methods():
-                    setattr(wrapper, method_info.__name__, method_info)
 
             if g_type != TYPE_NONE:
                 g_type.pytype = wrapper
@@ -214,6 +208,7 @@ class IntrospectionModule(object):
                     self.__dict__[name] = type_
                     return type_
 
+            name = info.get_name()
             dict_ = {
                 '__info__': info,
                 '__module__': 'gi.repository.' + self._namespace,
@@ -226,7 +221,7 @@ class IntrospectionModule(object):
                 g_type.pytype = wrapper
 
         elif isinstance(info, FunctionInfo):
-            wrapper = info
+            wrapper = Function(info)
         elif isinstance(info, ConstantInfo):
             wrapper = info.get_value()
         else:
@@ -265,8 +260,6 @@ def get_introspection_module(namespace):
     """
     :Returns:
         An object directly wrapping the gi module without overrides.
-
-    Might raise gi._gi.RepositoryError
     """
     if namespace in _introspection_modules:
         return _introspection_modules[namespace]
@@ -275,3 +268,70 @@ def get_introspection_module(namespace):
     module = IntrospectionModule(namespace, version)
     _introspection_modules[namespace] = module
     return module
+
+
+class DynamicModule(types.ModuleType):
+    """A module composed of an IntrospectionModule and an overrides module.
+
+    DynamicModule wraps up an IntrospectionModule and an overrides module
+    into a single accessible module. This is what is returned from statements
+    like "from gi.repository import Foo". Accessing attributes on a DynamicModule
+    will first look overrides (or the gi.overrides.registry cache) and then
+    in the introspection module if it was not found as an override.
+    """
+    def __init__(self, namespace):
+        self._namespace = namespace
+        self._introspection_module = None
+        self._overrides_module = None
+        self.__path__ = None
+
+    def _load(self):
+        self._introspection_module = get_introspection_module(self._namespace)
+        try:
+            overrides_modules = __import__('gi.overrides', fromlist=[self._namespace])
+            self._overrides_module = getattr(overrides_modules, self._namespace, None)
+        except ImportError:
+            self._overrides_module = None
+
+        self.__path__ = repository.get_typelib_path(self._namespace)
+        if _have_py3:
+            # get_typelib_path() delivers bytes, not a string
+            self.__path__ = self.__path__.decode('UTF-8')
+
+    def __getattr__(self, name):
+        if self._overrides_module is not None:
+            override_exports = getattr(self._overrides_module, '__all__', ())
+            if name in override_exports:
+                return getattr(self._overrides_module, name, None)
+        else:
+            # check the registry just in case the module hasn't loaded yet
+            # TODO: Only gtypes are registered in the registry right now
+            #       but it would be nice to register all overrides and
+            #       get rid of the module imports. We might actually see a
+            #       speedup.
+            key = '%s.%s' % (self._namespace, name)
+            if key in registry:
+                return registry[key]
+
+        return getattr(self._introspection_module, name)
+
+    def __dir__(self):
+        # Python's default dir() is just dir(self.__class__) + self.__dict__.keys()
+        result = set(dir(self.__class__))
+        result.update(self.__dict__.keys())
+
+        result.update(dir(self._introspection_module))
+        override_exports = getattr(self._overrides_module, '__all__', ())
+        result.update(override_exports)
+        return list(result)
+
+    def __repr__(self):
+        path = repository.get_typelib_path(self._namespace)
+        if _have_py3:
+            # get_typelib_path() delivers bytes, not a string
+            path = path.decode('UTF-8')
+
+        return "<%s.%s %r from %r>" % (self.__class__.__module__,
+                                       self.__class__.__name__,
+                                       self._namespace,
+                                       path)

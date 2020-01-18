@@ -23,26 +23,25 @@
 from __future__ import absolute_import
 
 import sys
-import warnings
 
-from ._constants import TYPE_INVALID
-from .docstring import generate_doc_string
+from . import _gobject
+from ._gobject._gobject import GInterface
+from ._gobject.constants import TYPE_INVALID
 
 from ._gi import \
     InterfaceInfo, \
     ObjectInfo, \
     StructInfo, \
     VFuncInfo, \
+    FunctionInfo, \
     register_interface_info, \
     hook_up_vfunc_implementation, \
-    _gobject
+    DIRECTION_IN, \
+    DIRECTION_OUT, \
+    DIRECTION_INOUT
 
-GInterface = _gobject.GInterface
 
 StructInfo  # pyflakes
-
-from . import _propertyhelper as propertyhelper
-from . import _signalhelper as signalhelper
 
 if (3, 0) <= sys.version_info < (3, 3):
     # callable not available for python 3.0 thru 3.2
@@ -50,21 +49,115 @@ if (3, 0) <= sys.version_info < (3, 3):
         return hasattr(obj, '__call__')
 
 
+def split_function_info_args(info):
+    """Split a functions args into a tuple of two lists.
+
+    Note that args marked as DIRECTION_INOUT will be in both lists.
+
+    :Returns:
+        Tuple of (in_args, out_args)
+    """
+    in_args = []
+    out_args = []
+    for arg in info.get_arguments():
+        direction = arg.get_direction()
+        if direction in (DIRECTION_IN, DIRECTION_INOUT):
+            in_args.append(arg)
+        if direction in (DIRECTION_OUT, DIRECTION_INOUT):
+            out_args.append(arg)
+    return (in_args, out_args)
+
+
+def get_callable_info_doc_string(info):
+    """Build a signature string which can be used for documentation."""
+    in_args, out_args = split_function_info_args(info)
+    in_args_strs = []
+    if isinstance(info, VFuncInfo):
+        in_args_strs = ['self']
+    elif isinstance(info, FunctionInfo):
+        if info.is_method():
+            in_args_strs = ['self']
+        elif info.is_constructor():
+            in_args_strs = ['cls']
+
+    for arg in in_args:
+        argstr = arg.get_name() + ':' + arg.get_pytype_hint()
+        if arg.is_optional():
+            argstr += '=<optional>'
+        in_args_strs.append(argstr)
+    in_args_str = ', '.join(in_args_strs)
+
+    if out_args:
+        out_args_str = ', '.join(arg.get_name() + ':' + arg.get_pytype_hint()
+                                 for arg in out_args)
+        return '%s(%s) -> %s' % (info.get_name(), in_args_str, out_args_str)
+    else:
+        return '%s(%s)' % (info.get_name(), in_args_str)
+
+
+def wraps_callable_info(info):
+    """Similar to functools.wraps but with specific GICallableInfo support."""
+    def update_func(func):
+        func.__info__ = info
+        func.__name__ = info.get_name()
+        func.__module__ = 'gi.repository.' + info.get_namespace()
+        func.__doc__ = get_callable_info_doc_string(info)
+        return func
+    return update_func
+
+
+def Function(info):
+    """Wraps GIFunctionInfo"""
+    @wraps_callable_info(info)
+    def function(*args, **kwargs):
+        return info.invoke(*args, **kwargs)
+
+    return function
+
+
+class NativeVFunc(object):
+    """Wraps GINativeVFuncInfo"""
+    def __init__(self, info):
+        self.__info__ = info
+
+    def __get__(self, instance, klass):
+        @wraps_callable_info(self.__info__)
+        def native_vfunc(*args, **kwargs):
+            return self.__info__.invoke(klass.__gtype__, *args, **kwargs)
+        return native_vfunc
+
+
+def Constructor(info):
+    """Wraps GIFunctionInfo with get_constructor() == True"""
+    @wraps_callable_info(info)
+    def constructor(cls, *args, **kwargs):
+        cls_name = info.get_container().get_name()
+        if cls.__name__ != cls_name:
+            raise TypeError('%s constructor cannot be used to create instances of a subclass' % cls_name)
+        return info.invoke(cls, *args, **kwargs)
+    return constructor
+
+
 class MetaClassHelper(object):
+
+    def _setup_constructors(cls):
+        for method_info in cls.__info__.get_methods():
+            if method_info.is_constructor():
+                name = method_info.get_name()
+                constructor = classmethod(Constructor(method_info))
+                setattr(cls, name, constructor)
+
     def _setup_methods(cls):
         for method_info in cls.__info__.get_methods():
-            setattr(cls, method_info.__name__, method_info)
-
-    def _setup_class_methods(cls):
-        info = cls.__info__
-        class_struct = info.get_class_struct()
-        if class_struct is None:
-            return
-        for method_info in class_struct.get_methods():
-            name = method_info.__name__
-            # Don't mask regular methods or base class methods with TypeClass methods.
-            if not hasattr(cls, name):
-                setattr(cls, name, classmethod(method_info))
+            name = method_info.get_name()
+            function = Function(method_info)
+            if method_info.is_method():
+                method = function
+            elif method_info.is_constructor():
+                continue
+            else:
+                method = staticmethod(function)
+            setattr(cls, name, method)
 
     def _setup_fields(cls):
         for field_info in cls.__info__.get_fields():
@@ -89,8 +182,9 @@ class MetaClassHelper(object):
             vfunc_info = None
             for base in cls.__mro__:
                 method = getattr(base, vfunc_name, None)
-                if method is not None and isinstance(method, VFuncInfo):
-                    vfunc_info = method
+                if method is not None and hasattr(method, '__info__') and \
+                        isinstance(method.__info__, VFuncInfo):
+                    vfunc_info = method.__info__
                     break
 
             # If we did not find a matching method name in the bases, we might
@@ -137,8 +231,9 @@ class MetaClassHelper(object):
             return
 
         for vfunc_info in class_info.get_vfuncs():
-            name = 'do_%s' % vfunc_info.__name__
-            setattr(cls, name, vfunc_info)
+            name = 'do_%s' % vfunc_info.get_name()
+            value = NativeVFunc(vfunc_info)
+            setattr(cls, name, value)
 
 
 def find_vfunc_info_in_interface(bases, vfunc_name):
@@ -184,31 +279,8 @@ def find_vfunc_conflict_in_bases(vfunc, bases):
     return None
 
 
-class _GObjectMetaBase(type):
-    """Metaclass for automatically registering GObject classes."""
-    def __init__(cls, name, bases, dict_):
-        type.__init__(cls, name, bases, dict_)
-        propertyhelper.install_properties(cls)
-        signalhelper.install_signals(cls)
-        cls._type_register(cls.__dict__)
+class GObjectMeta(_gobject.GObjectMeta, MetaClassHelper):
 
-    def _type_register(cls, namespace):
-        # don't register the class if already registered
-        if '__gtype__' in namespace:
-            return
-
-        # Do not register a new GType for the overrides, as this would sort of
-        # defeat the purpose of overrides...
-        if cls.__module__.startswith('gi.overrides.'):
-            return
-
-        _gobject.type_register(cls, namespace.get('__gtype_name__'))
-
-_gobject._install_metaclass(_GObjectMetaBase)
-
-
-class GObjectMeta(_GObjectMetaBase, MetaClassHelper):
-    """Meta class used for GI GObject based types."""
     def __init__(cls, name, bases, dict_):
         super(GObjectMeta, cls).__init__(name, bases, dict_)
         is_gi_defined = False
@@ -222,72 +294,32 @@ class GObjectMeta(_GObjectMetaBase, MetaClassHelper):
         if is_python_defined:
             cls._setup_vfuncs()
         elif is_gi_defined:
-            if isinstance(cls.__info__, ObjectInfo):
-                cls._setup_class_methods()
             cls._setup_methods()
             cls._setup_constants()
             cls._setup_native_vfuncs()
 
             if isinstance(cls.__info__, ObjectInfo):
                 cls._setup_fields()
+                cls._setup_constructors()
             elif isinstance(cls.__info__, InterfaceInfo):
                 register_interface_info(cls.__info__.get_g_type())
 
     def mro(cls):
         return mro(cls)
 
-    @property
-    def __doc__(cls):
-        """Meta class property which shows up on any class using this meta-class."""
-        if cls == GObjectMeta:
-            return ''
-
-        doc = cls.__dict__.get('__doc__', None)
-        if doc is not None:
-            return doc
-
-        # For repository classes, dynamically generate a doc string if it wasn't overridden.
-        if cls.__module__.startswith(('gi.repository.', 'gi.overrides')):
-            return generate_doc_string(cls.__info__)
-
-        return None
-
 
 def mro(C):
-    """Compute the class precedence list (mro) according to C3, with GObject
-    interface considerations.
-
-    We override Python's MRO calculation to account for the fact that
-    GObject classes are not affected by the diamond problem:
-    http://en.wikipedia.org/wiki/Diamond_problem
+    """Compute the class precedence list (mro) according to C3
 
     Based on http://www.python.org/download/releases/2.3/mro/
+    Modified to consider that interfaces don't create the diamond problem
     """
     # TODO: If this turns out being too slow, consider using generators
     bases = []
     bases_of_subclasses = [[C]]
 
     if C.__bases__:
-        for base in C.__bases__:
-            # Python causes MRO's to be calculated starting with the lowest
-            # base class and working towards the descendant, storing the result
-            # in __mro__ at each point. Therefore at this point we know that
-            # we already have our base class MRO's available to us, there is
-            # no need for us to (re)calculate them.
-            if hasattr(base, '__mro__'):
-                bases_of_subclasses += [list(base.__mro__)]
-            else:
-                warnings.warn('Mixin class %s is an old style class, please '
-                              'update this to derive from "object".' % base,
-                              RuntimeWarning)
-                # For old-style classes (Python2 only), the MRO is not
-                # easily accessible. As we do need it here, we calculate
-                # it via recursion, according to the C3 algorithm. Using C3
-                # for old style classes deviates from Python's own behaviour,
-                # but visible effects here would be a corner case triggered by
-                # questionable design.
-                bases_of_subclasses += [mro(base)]
-        bases_of_subclasses += [list(C.__bases__)]
+        bases_of_subclasses += list(map(mro, C.__bases__)) + [list(C.__bases__)]
 
     while bases_of_subclasses:
         for subclass_bases in bases_of_subclasses:
@@ -313,12 +345,7 @@ def mro(C):
     return bases
 
 
-def nothing(*args, **kwargs):
-    pass
-
-
 class StructMeta(type, MetaClassHelper):
-    """Meta class used for GI Struct based types."""
 
     def __init__(cls, name, bases, dict_):
         super(StructMeta, cls).__init__(name, bases, dict_)
@@ -330,20 +357,11 @@ class StructMeta(type, MetaClassHelper):
 
         cls._setup_fields()
         cls._setup_methods()
+        cls._setup_constructors()
 
         for method_info in cls.__info__.get_methods():
             if method_info.is_constructor() and \
-                    method_info.__name__ == 'new' and \
-                    (not method_info.get_arguments() or
-                     cls.__info__.get_size() == 0):
-                cls.__new__ = staticmethod(method_info)
-                # Boxed will raise an exception
-                # if arguments are given to __init__
-                cls.__init__ = nothing
+                    method_info.get_name() == 'new' and \
+                    not method_info.get_arguments():
+                cls.__new__ = staticmethod(Constructor(method_info))
                 break
-
-    @property
-    def __doc__(cls):
-        if cls == StructMeta:
-            return ''
-        return generate_doc_string(cls.__info__)

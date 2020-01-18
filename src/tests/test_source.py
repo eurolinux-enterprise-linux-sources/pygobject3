@@ -1,13 +1,10 @@
 # -*- Mode: Python -*-
 
-import gc
 import unittest
 import warnings
 
-from gi.repository import GLib
+from gi.repository import GLib, GObject
 from gi import PyGIDeprecationWarning
-
-from helper import capture_glib_warnings
 
 
 class Idle(GLib.Idle):
@@ -126,23 +123,18 @@ class TestSource(unittest.TestCase):
             return s
 
         s = f()
-        gc.collect()
         self.assertTrue(s.is_destroyed())
 
     def test_remove(self):
         s = GLib.idle_add(dir)
         self.assertEqual(GLib.source_remove(s), True)
+        # s is now removed, should fail now
+        self.assertEqual(GLib.source_remove(s), False)
 
-        # Removing sources not found cause critical
-        with capture_glib_warnings(allow_criticals=True):
-
-            # s is now removed, should fail now
-            self.assertEqual(GLib.source_remove(s), False)
-
-            # accepts large source IDs (they are unsigned)
-            self.assertEqual(GLib.source_remove(GLib.MAXINT32), False)
-            self.assertEqual(GLib.source_remove(GLib.MAXINT32 + 1), False)
-            self.assertEqual(GLib.source_remove(GLib.MAXUINT32), False)
+        # accepts large source IDs (they are unsigned)
+        self.assertEqual(GLib.source_remove(GObject.G_MAXINT32), False)
+        self.assertEqual(GLib.source_remove(GObject.G_MAXINT32 + 1), False)
+        self.assertEqual(GLib.source_remove(GObject.G_MAXUINT32), False)
 
     def test_recurse_property(self):
         s = GLib.Idle()
@@ -207,9 +199,8 @@ class TestSource(unittest.TestCase):
                 self.finalized = True
 
         source = S()
-        self.assertEqual(source.ref_count, 1)
-        source.attach()
-        self.assertEqual(source.ref_count, 2)
+        id = source.attach()
+        print('source id:', id)
         self.assertFalse(self.finalized)
         self.assertFalse(source.is_destroyed())
 
@@ -217,68 +208,11 @@ class TestSource(unittest.TestCase):
             pass
 
         source.destroy()
-        self.assertEqual(source.ref_count, 1)
         self.assertTrue(self.dispatched)
         self.assertFalse(self.finalized)
         self.assertTrue(source.is_destroyed())
         del source
         self.assertTrue(self.finalized)
-
-    @unittest.skip('https://bugzilla.gnome.org/show_bug.cgi?id=722387')
-    def test_python_unref_with_active_source(self):
-        # Tests a Python derived Source which is free'd in the context of
-        # Python, but remains active in the MainContext (via source.attach())
-        self.dispatched = False
-        self.finalized = False
-
-        class S(GLib.Source):
-            def prepare(s):
-                return (True, 1)
-
-            def check(s):
-                pass
-
-            def dispatch(s, callback, args):
-                self.dispatched = True
-                return False
-
-            def finalize(s):
-                self.finalized = True
-
-        source = S()
-        id = source.attach()
-        self.assertFalse(self.finalized)
-        self.assertFalse(source.is_destroyed())
-
-        # Delete the source from Python but should still remain
-        # active in the main context.
-        del source
-
-        context = GLib.MainContext.default()
-        while context.iteration(may_block=False):
-            pass
-
-        self.assertTrue(self.dispatched)
-        self.assertFalse(self.finalized)
-
-        source = context.find_source_by_id(id)
-        source.destroy()  # Remove from main context.
-        self.assertTrue(source.is_destroyed())
-
-        # Source should be finalized called after del
-        del source
-        self.assertTrue(self.finalized)
-
-    def test_extra_init_args(self):
-        class SourceWithInitArgs(GLib.Source):
-            def __init__(self, arg, kwarg=None):
-                super(SourceWithInitArgs, self).__init__()
-                self.arg = arg
-                self.kwarg = kwarg
-
-        source = SourceWithInitArgs(1, kwarg=2)
-        self.assertEqual(source.arg, 1)
-        self.assertEqual(source.kwarg, 2)
 
 
 class TestUserData(unittest.TestCase):

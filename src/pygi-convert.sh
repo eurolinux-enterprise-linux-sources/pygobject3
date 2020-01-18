@@ -17,7 +17,6 @@ for f in $FILES_TO_CONVERT; do
 \
     -pe "s/import pygtk/import gi/g;" \
     -pe "s/pygtk.require\('2.0'\)/gi.require_version\('Gtk', '3.0'\)/g;" \
-    -pe "s/pygtk.require\(\"2.0\"\)/gi.require_version\(\"Gtk\", \"3.0\"\)/g;" \
     -pe "s/import gtk\n/from gi.repository import Gtk\n/g;" \
     -pe "s/(?<!\.)gtk\./Gtk\./g;" \
     -pe "s/Gtk.ACCEL_/Gtk.AccelFlags./g;" \
@@ -47,8 +46,6 @@ for f in $FILES_TO_CONVERT; do
     -pe "s/Gtk.ORIENTATION_/Gtk.Orientation./g;" \
     -pe "s/Gtk.POLICY_/Gtk.PolicyType./g;" \
     -pe "s/Gtk.POS_/Gtk.PositionType./g;" \
-    -pe "s/Gtk.RECENT_FILTER_/Gtk.RecentFilterFlags./g;" \
-    -pe "s/Gtk.RECENT_SORT_/Gtk.RecentSortType./g;" \
     -pe "s/Gtk.RELIEF_/Gtk.ReliefStyle./g;" \
     -pe "s/Gtk.RESPONSE_/Gtk.ResponseType./g;" \
     -pe "s/Gtk.SELECTION_/Gtk.SelectionMode./g;" \
@@ -62,7 +59,6 @@ for f in $FILES_TO_CONVERT; do
     -pe "s/Gtk.TEXT_DIR_/Gtk.TextDirection./g;" \
     -pe "s/Gtk.TEXT_SEARCH_/Gtk.TextSearchFlags./g;" \
     -pe "s/Gtk.TEXT_WINDOW_/Gtk.TextWindowType./g;" \
-    -pe "s/Gtk.TOOLBAR_/Gtk.ToolbarStyle./g;" \
     -pe "s/Gtk.TREE_MODEL_/Gtk.TreeModelFlags./g;" \
     -pe "s/Gtk.TREE_VIEW_COLUMN_/Gtk.TreeViewColumnSizing./g;" \
     -pe "s/Gtk.TREE_VIEW_DROP_/Gtk.TreeViewDropPosition./g;" \
@@ -75,12 +71,11 @@ for f in $FILES_TO_CONVERT; do
     -pe "s/Gtk.accel_map_/Gtk.AccelMap./g;" \
     -pe "s/Gtk.settings_get_/Gtk.Settings.get_/g;" \
     -pe "s/Gtk.icon_theme_get_default/Gtk.IconTheme.get_default/g;" \
-    -pe "s/Gtk.recent_manager_get_default/Gtk.RecentManager.get_default/g;" \
     -pe "s/Gtk.image_new_from_stock/Gtk.Image.new_from_stock/g;" \
     -pe "s/Gtk.image_new_from_icon_name/Gtk.Image.new_from_icon_name/g;" \
     -pe "s/Gtk.window_set_default_icon_name/Gtk.Window.set_default_icon_name/g; " \
     -pe "s/Gtk.combo_box_new_text/Gtk.ComboBoxText/g;" \
-    -pe "s/Gtk.keysyms\./Gdk.KEY_/g;" \
+    -pe "s/Gtk.keysyms./Gdk.KEY_/g;" \
     -pe "s/set_flags\(Gtk.CAN_DEFAULT\)/set_can_default\(True\)/g;" \
     -pe "s/.flags\(\) & Gtk.MAPPED/.get_mapped\(\)/g;" \
     -pe "s/.flags\(\) & Gtk.REALIZED/.get_realized\(\)/g;" \
@@ -195,8 +190,6 @@ for f in $FILES_TO_CONVERT; do
 \
     -pe "s/import gio\n/from gi.repository import Gio\n/g;" \
     -pe "s/gio\./Gio\./g;" \
-    -pe "s/Gio\.File\(uri=/Gio\.File\.new_for_uri\(/g;" \
-    -pe "s/Gio\.File\(path=/Gio\.File\.new_for_path\(/g;" \
     -pe "s/Gio.FILE_COPY_/Gio.FileCopyFlags./g;" \
     -pe "s/Gio.FILE_CREATE_/Gio.FileCreateFlags./g;" \
     -pe "s/Gio.FILE_MONITOR_EVENT_/Gio.FileMonitorEvent./g;" \

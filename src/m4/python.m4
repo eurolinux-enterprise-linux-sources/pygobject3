@@ -48,8 +48,12 @@ if test "x$PYTHON_INCLUDES" = x; then
   if test -x "$PYTHON_CONFIG"; then
     PYTHON_INCLUDES=`$PYTHON_CONFIG --includes 2>/dev/null`
   else
-    PYTHON_INCLUDES=`$PYTHON -c "import distutils.sysconfig, sys; sys.stdout.write(distutils.sysconfig.get_python_inc(True))"`
-    PYTHON_INCLUDES="-I$PYTHON_INCLUDES"
+    py_prefix=`$PYTHON -c "import sys; sys.stdout.write(sys.prefix)"`
+    py_exec_prefix=`$PYTHON -c "import sys; sys.stdout.write(sys.exec_prefix)"`
+    PYTHON_INCLUDES="-I${py_prefix}/include/python${PYTHON_VERSION}"
+    if test "$py_prefix" != "$py_exec_prefix"; then
+      PYTHON_INCLUDES="$PYTHON_INCLUDES -I${py_exec_prefix}/include/python${PYTHON_VERSION}"
+    fi
   fi
 fi
 AC_SUBST(PYTHON_INCLUDES)
@@ -68,17 +72,12 @@ dnl a macro to check for ability to embed python
 dnl  AM_CHECK_PYTHON_LIBS([ACTION-IF-POSSIBLE], [ACTION-IF-NOT-POSSIBLE])
 dnl function also defines PYTHON_LIBS
 AC_DEFUN([AM_CHECK_PYTHON_LIBS],
-[AC_REQUIRE([AM_PATH_PYTHON])
+[AC_REQUIRE([AM_CHECK_PYTHON_HEADERS])
 AC_MSG_CHECKING(for libraries required to embed python)
 dnl deduce PYTHON_LIBS
-py_prefix=`$PYTHON -c "import sys; sys.stdout.write(sys.prefix)"`
+py_exec_prefix=`$PYTHON -c "import sys; print(sys.exec_prefix)"`
 if test "x$PYTHON_LIBS" = x; then
-  PYTHON_CONFIG=`which $PYTHON`-config
-  if test -x "$PYTHON_CONFIG"; then
-    PYTHON_LIBS=`$PYTHON_CONFIG --ldflags 2>/dev/null`
-  else
-    PYTHON_LIBS="-L${py_prefix}/lib -lpython${PYTHON_VERSION}"
-  fi
+	PYTHON_LIBS="-L${py_prefix}/lib -lpython${PYTHON_VERSION}"
 fi
 if test "x$PYTHON_LIB_LOC" = x; then
 	PYTHON_LIB_LOC="${py_prefix}/lib"
@@ -93,6 +92,25 @@ AC_TRY_LINK_FUNC(Py_Initialize, dnl
          [LIBS="$save_LIBS"; AC_MSG_RESULT(no); $2])
 
 ])
+
+# JD_PYTHON_CHECK_VERSION(PROG, VERSION, [ACTION-IF-TRUE], [ACTION-IF-FALSE])
+# ---------------------------------------------------------------------------
+# Run ACTION-IF-TRUE if the Python interpreter PROG has version >= VERSION.
+# Run ACTION-IF-FALSE otherwise.
+# This test uses sys.hexversion instead of the string equivalent.
+# This is similar to AM_PYTHON_CHECK_VERSION, but without python 1.5.x support
+# and with python 3.0 support.
+AC_DEFUN([JD_PYTHON_CHECK_VERSION],
+ [prog="import sys
+# split strings by '.' and convert to numeric.  Append some zeros
+# because we need at least 4 digits for the hex conversion.
+# map returns an iterator in Python 3.0 and a list in 2.x
+minver = list(map(int, '$2'.split('.'))) + [[0, 0, 0]]
+minverhex = 0
+# xrange is not present in Python 3.0 and range returns an iterator
+for i in list(range(0, 4)): minverhex = (minverhex << 8) + minver[[i]]
+sys.exit(sys.hexversion < minverhex)"
+  AS_IF([AM_RUN_LOG([$1 -c "$prog"])], [$3], [$4])])
 
 # Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005
 # Free Software Foundation, Inc.
@@ -128,7 +146,7 @@ AC_DEFUN([JD_PATH_PYTHON],
   dnl Find a Python interpreter.  Python versions prior to 2.0 are not
   dnl supported
   m4_define_default([_AM_PYTHON_INTERPRETER_LIST],
-                    [python3 python3.3 python3.2 python3.1 python2 python2.7 python])
+                    [python3 python3.3 python3.2 python3.1 python2 python2.7 python2.6 python])
 
   m4_if([$1],[],[
     dnl No version check is needed.
@@ -142,7 +160,7 @@ AC_DEFUN([JD_PATH_PYTHON],
     if test -n "$PYTHON"; then
       # If the user set $PYTHON, use it and don't search something else.
       AC_MSG_CHECKING([whether $PYTHON version >= $1])
-      AM_PYTHON_CHECK_VERSION([$PYTHON], [$1],
+      JD_PYTHON_CHECK_VERSION([$PYTHON], [$1],
 			      [AC_MSG_RESULT(yes)],
 			      [AC_MSG_ERROR(too old)])
       am_display_PYTHON=$PYTHON
@@ -153,7 +171,7 @@ AC_DEFUN([JD_PATH_PYTHON],
 	[am_cv_pathless_PYTHON],[
 	for am_cv_pathless_PYTHON in _AM_PYTHON_INTERPRETER_LIST none; do
 	  test "$am_cv_pathless_PYTHON" = none && break
-	  AM_PYTHON_CHECK_VERSION([$am_cv_pathless_PYTHON], [$1], [break])
+	  JD_PYTHON_CHECK_VERSION([$am_cv_pathless_PYTHON], [$1], [break])
 	done])
       # Set $PYTHON to the absolute path of $am_cv_pathless_PYTHON.
       if test "$am_cv_pathless_PYTHON" = none; then

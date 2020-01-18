@@ -13,13 +13,30 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see <http://www.gnu.org/licenses/>.
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
+ * USA
  */
 
-#include "pygi-signal-closure.h"
-#include "pygi-value.h"
-#include "pygi-argument.h"
-#include "pygi-boxed.h"
+#include "pygi-private.h"
+
+/* Copied from glib */
+static void
+canonicalize_key (gchar *key)
+{
+    gchar *p;
+
+    for (p = key; *p != 0; p++)
+    {
+        gchar c = *p;
+
+        if (c != '-' &&
+            (c < '0' || c > '9') &&
+            (c < 'A' || c > 'Z') &&
+            (c < 'a' || c > 'z'))
+                *p = '-';
+    }
+}
 
 static GISignalInfo *
 _pygi_lookup_signal_from_g_type (GType g_type,
@@ -27,22 +44,23 @@ _pygi_lookup_signal_from_g_type (GType g_type,
 {
     GIRepository *repository;
     GIBaseInfo *info;
-    GISignalInfo *signal_info = NULL;
+    GType parent;
 
     repository = g_irepository_get_default();
     info = g_irepository_find_by_gtype (repository, g_type);
-    if (info == NULL)
-        return NULL;
+    if (info != NULL) {
+        GISignalInfo *signal_info;
+        signal_info = g_object_info_find_signal ((GIObjectInfo *) info, signal_name);
+        g_base_info_unref (info);
+        if (signal_info != NULL)
+            return signal_info;
+    }
 
-    if (GI_IS_OBJECT_INFO (info))
-        signal_info = g_object_info_find_signal ((GIObjectInfo *) info,
-                                                 signal_name);
-    else if (GI_IS_INTERFACE_INFO (info))
-        signal_info = g_interface_info_find_signal ((GIInterfaceInfo *) info,
-                                                    signal_name);
+    parent = g_type_parent (g_type);
+    if (parent > 0)
+        return _pygi_lookup_signal_from_g_type (parent, signal_name);
 
-    g_base_info_unref (info);
-    return signal_info;
+    return NULL;
 }
 
 static void
@@ -81,8 +99,6 @@ pygi_signal_closure_marshal(GClosure *closure,
     GISignalInfo *signal_info;
     gint n_sig_info_args;
     gint sig_info_highest_arg;
-    GSList *list_item = NULL;
-    GSList *pass_by_ref_structs = NULL;
 
     state = PyGILState_Ensure();
 
@@ -113,75 +129,31 @@ pygi_signal_closure_marshal(GClosure *closure,
         } else if (i < sig_info_highest_arg) {
             GIArgInfo arg_info;
             GITypeInfo type_info;
-            GITypeTag type_tag;
+            GITransfer transfer;
             GIArgument arg = { 0, };
             PyObject *item = NULL;
             gboolean free_array = FALSE;
-            gboolean pass_struct_by_ref = FALSE;
 
             g_callable_info_load_arg(signal_info, i - 1, &arg_info);
             g_arg_info_load_type(&arg_info, &type_info);
+            transfer = g_arg_info_get_ownership_transfer(&arg_info);
 
             arg = _pygi_argument_from_g_value(&param_values[i], &type_info);
-
-            type_tag = g_type_info_get_tag (&type_info);
-            if (type_tag == GI_TYPE_TAG_ARRAY) {
+            
+            if (g_type_info_get_tag (&type_info) == GI_TYPE_TAG_ARRAY) {
                 /* Skip the self argument of param_values */
-                arg.v_pointer = _pygi_argument_to_array (&arg,
-                                                         _pygi_argument_array_length_marshal,
-                                                         (void *)(param_values + 1),
-                                                         signal_info,
-                                                         &type_info,
-                                                         &free_array);
+                arg.v_pointer = _pygi_argument_to_array (&arg, NULL, param_values + 1, signal_info,
+                                                         &type_info, &free_array);
             }
-
-            /* Hack to ensure struct arguments are passed-by-reference allowing
-             * callback implementors to modify the struct values. This is needed
-             * for keeping backwards compatibility and should be removed in future
-             * versions which support signal output arguments as return values.
-             * See: https://bugzilla.gnome.org/show_bug.cgi?id=735486
-             *
-             * Note the logic here must match the logic path taken in _pygi_argument_to_object.
-             */
-            if (type_tag == GI_TYPE_TAG_INTERFACE) {
-                GIBaseInfo *info = g_type_info_get_interface (&type_info);
-                GIInfoType info_type = g_base_info_get_type (info);
-
-                if (info_type == GI_INFO_TYPE_STRUCT ||
-                        info_type == GI_INFO_TYPE_BOXED ||
-                        info_type == GI_INFO_TYPE_UNION) {
-
-                    GType gtype = g_registered_type_info_get_g_type ((GIRegisteredTypeInfo *) info);
-                    gboolean is_foreign = (info_type == GI_INFO_TYPE_STRUCT) &&
-                                          (g_struct_info_is_foreign ((GIStructInfo *) info));
-
-                    if (!is_foreign && !g_type_is_a (gtype, G_TYPE_VALUE) &&
-                            g_type_is_a (gtype, G_TYPE_BOXED)) {
-                        pass_struct_by_ref = TRUE;
-                    }
-                }
-
-                g_base_info_unref (info);
-            }
-
-            if (pass_struct_by_ref) {
-                /* transfer everything will ensure the struct is not copied when wrapped. */
-                item = _pygi_argument_to_object (&arg, &type_info, GI_TRANSFER_EVERYTHING);
-                if (item && PyObject_IsInstance (item, (PyObject *) &PyGIBoxed_Type)) {
-                    ((PyGBoxed *)item)->free_on_dealloc = FALSE;
-                    pass_by_ref_structs = g_slist_prepend (pass_by_ref_structs, item);
-                }
-
-            } else {
-                item = _pygi_argument_to_object (&arg, &type_info, GI_TRANSFER_NOTHING);
-            }
-
+            
+            item = _pygi_argument_to_object (&arg, &type_info, transfer);
+            
             if (free_array) {
                 g_array_free (arg.v_pointer, FALSE);
             }
+            
 
             if (item == NULL) {
-                PyErr_Print ();
                 goto out;
             }
             PyTuple_SetItem(params, i, item);
@@ -202,7 +174,7 @@ pygi_signal_closure_marshal(GClosure *closure,
         goto out;
     }
 
-    if (G_IS_VALUE(return_value) && pyg_value_from_pyobject(return_value, ret) != 0) {
+    if (return_value && pyg_value_from_pyobject(return_value, ret) != 0) {
         PyErr_SetString(PyExc_TypeError,
                         "can't convert return value to desired type");
 
@@ -213,45 +185,33 @@ pygi_signal_closure_marshal(GClosure *closure,
     }
     Py_DECREF(ret);
 
-    /* Run through the list of structs which have been passed by reference and
-     * check if they are being held longer than the duration of the callback
-     * execution. This is determined if the ref count is greater than 1.
-     * A single ref is held by the argument list and any more would mean the callback
-     * stored a ref somewhere else. In this case we make an internal copy of
-     * the boxed struct so Python can own the memory to it.
-     */
-    list_item = pass_by_ref_structs;
-    while (list_item) {
-        PyObject *item = list_item->data;
-        if (item->ob_refcnt > 1) {
-            _pygi_boxed_copy_in_place ((PyGIBoxed *)item);
-        }
-        list_item = g_slist_next (list_item);
-    }
-
  out:
-    g_slist_free (pass_by_ref_structs);
     Py_DECREF(params);
     PyGILState_Release(state);
 }
 
 GClosure *
-pygi_signal_closure_new (PyGObject *instance,
-                         GType g_type,
-                         const gchar *signal_name,
-                         PyObject *callback,
-                         PyObject *extra_args,
-                         PyObject *swap_data)
+pygi_signal_closure_new_real (PyGObject *instance,
+                              const gchar *sig_name,
+                              PyObject *callback,
+                              PyObject *extra_args,
+                              PyObject *swap_data)
 {
     GClosure *closure = NULL;
     PyGISignalClosure *pygi_closure = NULL;
+    GType g_type;
     GISignalInfo *signal_info = NULL;
+    char *signal_name = g_strdup (sig_name);
 
     g_return_val_if_fail(callback != NULL, NULL);
 
+    canonicalize_key(signal_name);
+
+    g_type = pyg_type_from_object ((PyObject *)instance);
     signal_info = _pygi_lookup_signal_from_g_type (g_type, signal_name);
+
     if (signal_info == NULL)
-        return NULL;
+        goto out;
 
     closure = g_closure_new_simple(sizeof(PyGISignalClosure), NULL);
     g_closure_add_invalidate_notifier(closure, NULL, pygi_signal_closure_invalidate);
@@ -277,6 +237,9 @@ pygi_signal_closure_new (PyGObject *instance,
         pygi_closure->pyg_closure.swap_data = swap_data;
         closure->derivative_flag = TRUE;
     }
+
+out:
+    g_free (signal_name);
 
     return closure;
 }

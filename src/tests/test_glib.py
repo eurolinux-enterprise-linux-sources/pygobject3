@@ -38,14 +38,11 @@ class TestGLib(unittest.TestCase):
     def test_xdg_dirs(self):
         d = GLib.get_user_data_dir()
         self.assertTrue('/' in d, d)
-        d = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DESKTOP)
+        d = GLib.get_user_special_dir(GLib.USER_DIRECTORY_DESKTOP)
         self.assertTrue('/' in d, d)
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore', PyGIDeprecationWarning)
-
-            # also works with backwards compatible enum names
-            self.assertEqual(GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_MUSIC),
-                             GLib.get_user_special_dir(GLib.USER_DIRECTORY_MUSIC))
+        # also works with backwards compatible enum names
+        self.assertEqual(GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_MUSIC),
+                         GLib.get_user_special_dir(GLib.USER_DIRECTORY_MUSIC))
 
         for d in GLib.get_system_config_dirs():
             self.assertTrue('/' in d, d)
@@ -168,27 +165,6 @@ https://my.org/q?x=1&y=2
         self.assertEqual(call_data, [(r, GLib.IOCondition.IN, b'a', 'moo'),
                                      (r, GLib.IOCondition.IN, b'b', 'moo')])
 
-    def test_io_add_watch_with_multiple_data(self):
-        (r, w) = os.pipe()
-        call_data = []
-
-        def cb(fd, condition, *user_data):
-            call_data.append((fd, condition, os.read(fd, 1), user_data))
-            return True
-
-        # io_add_watch() takes an IOChannel, calling with an fd is deprecated
-        with warnings.catch_warnings(record=True) as warn:
-            warnings.simplefilter('always')
-            GLib.io_add_watch(r, GLib.IOCondition.IN, cb, 'moo', 'foo')
-            self.assertTrue(issubclass(warn[0].category, PyGIDeprecationWarning))
-
-        ml = GLib.MainLoop()
-        GLib.timeout_add(10, lambda: os.write(w, b'a') and False)
-        GLib.timeout_add(100, ml.quit)
-        ml.run()
-
-        self.assertEqual(call_data, [(r, GLib.IOCondition.IN, b'a', ('moo', 'foo'))])
-
     def test_io_add_watch_pyfile(self):
         call_data = []
 
@@ -218,30 +194,13 @@ https://my.org/q?x=1&y=2
                                      (cmd.stdout, GLib.IOCondition.IN, b'world\n')])
 
     def test_glib_version(self):
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore', PyGIDeprecationWarning)
-
-            (major, minor, micro) = GLib.glib_version
-            self.assertGreaterEqual(major, 2)
-            self.assertGreaterEqual(minor, 0)
-            self.assertGreaterEqual(micro, 0)
+        (major, minor, micro) = GLib.glib_version
+        self.assertGreaterEqual(major, 2)
+        self.assertGreaterEqual(minor, 0)
+        self.assertGreaterEqual(micro, 0)
 
     def test_pyglib_version(self):
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore', PyGIDeprecationWarning)
-
-            (major, minor, micro) = GLib.pyglib_version
-            self.assertGreaterEqual(major, 3)
-            self.assertGreaterEqual(minor, 0)
-            self.assertGreaterEqual(micro, 0)
-
-    def test_timezone_constructor(self):
-        timezone = GLib.TimeZone("+05:21")
-        self.assertEqual(timezone.get_offset(0), ((5 * 60) + 21) * 60)
-
-    def test_source_attach_implicit_context(self):
-        context = GLib.MainContext.default()
-        source = GLib.Idle()
-        source_id = source.attach()
-        self.assertEqual(context, source.get_context())
-        self.assertTrue(GLib.Source.remove(source_id))
+        (major, minor, micro) = GLib.pyglib_version
+        self.assertGreaterEqual(major, 3)
+        self.assertGreaterEqual(minor, 0)
+        self.assertGreaterEqual(micro, 0)

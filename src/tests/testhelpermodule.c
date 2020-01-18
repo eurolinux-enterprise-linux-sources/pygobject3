@@ -513,10 +513,7 @@ _wrap_test_value_array(PyObject *self, PyObject *args)
   if (!PyArg_ParseTuple(args, "O", &obj))
     return NULL;
 
-  G_GNUC_BEGIN_IGNORE_DEPRECATIONS
   g_value_init(value, G_TYPE_VALUE_ARRAY);
-  G_GNUC_END_IGNORE_DEPRECATIONS
-
   if (pyg_value_from_pyobject(value, obj)) {
     PyErr_SetString(PyExc_TypeError, "Could not convert to GValueArray");
     return NULL;
@@ -618,7 +615,7 @@ PYGLIB_MODULE_START(testhelper, "testhelper")
 
   d = PyModule_GetDict(module);
 
-  if ((m = PyImport_ImportModule("gi.repository.GObject")) == NULL) {
+  if ((m = PyImport_ImportModule("gi._gobject._gobject")) == NULL) {
     PyErr_SetString(PyExc_ImportError,
 		    "could not import gobject");
     return PYGLIB_MODULE_ERROR_RETURN;

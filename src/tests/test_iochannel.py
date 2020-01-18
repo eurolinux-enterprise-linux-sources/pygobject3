@@ -49,7 +49,7 @@ second line
         self.assertEqual(_unicode(ch.readline()), 'À demain!')
         self.assertEqual(ch.get_buffer_condition(), 0)
         self.assertEqual(ch.readline(), '')
-        ch.shutdown(True)
+        ch.close()
 
     def test_file_readline_latin1(self):
         ch = GLib.IOChannel(filename=self.testlatin1, mode='r')
@@ -59,7 +59,7 @@ second line
         self.assertEqual(ch.readline(), 'second line\n')
         self.assertEqual(ch.readline(), '\n')
         self.assertEqual(_unicode(ch.readline()), 'À demain!')
-        ch.shutdown(True)
+        ch.close()
 
     def test_file_iter(self):
         items = []
@@ -68,7 +68,7 @@ second line
             items.append(item)
         self.assertEqual(len(items), 4)
         self.assertEqual(_unicode(items[0]), 'hello ♥ world\n')
-        ch.shutdown(True)
+        ch.close()
 
     def test_file_readlines(self):
         ch = GLib.IOChannel(filename=self.testutf8)
@@ -108,7 +108,7 @@ second line
 
         ch.seek(2, 2)  # SEEK_END
         # FIXME: does not work currently
-        # self.assertEqual(ch.read(2), b'n!')
+        #self.assertEqual(ch.read(2), b'n!')
 
         # invalid whence value
         self.assertRaises(ValueError, ch.seek, 0, 3)
@@ -117,11 +117,11 @@ second line
         ch = GLib.IOChannel(filename=self.testout, mode='w')
         ch.set_encoding('latin1')
         ch.write('hellø world\n')
-        ch.shutdown(True)
+        ch.close()
         ch = GLib.IOChannel(filename=self.testout, mode='a')
         ch.set_encoding('latin1')
         ch.write('À demain!')
-        ch.shutdown(True)
+        ch.close()
 
         with open(self.testout, 'rb') as f:
             self.assertEqual(f.read().decode('latin1'), 'hellø world\nÀ demain!')
@@ -129,7 +129,7 @@ second line
     def test_file_writelines(self):
         ch = GLib.IOChannel(filename=self.testout, mode='w')
         ch.writelines(['foo', 'bar\n', 'baz\n', 'end'])
-        ch.shutdown(True)
+        ch.close()
 
         with open(self.testout, 'r') as f:
             self.assertEqual(f.read(), 'foobar\nbaz\nend')
@@ -163,9 +163,9 @@ second line
         # closing flushes
         writer.set_buffered(True)
         writer.write('ghi')
-        writer.shutdown(True)
+        writer.close()
         self.assertEqual(reader.read(), b'ghi')
-        reader.shutdown(True)
+        reader.close()
 
     def test_fd_read(self):
         (r, w) = os.pipe()
@@ -184,7 +184,7 @@ second line
         os.close(w)
         self.assertEqual(ch.read(), b'\x03\x04')
 
-        ch.shutdown(True)
+        ch.close()
 
     def test_fd_write(self):
         (r, w) = os.pipe()
@@ -199,7 +199,7 @@ second line
         # now test blocking case, after closing the write end
         fcntl.fcntl(r, fcntl.F_SETFL, fcntl.fcntl(r, fcntl.F_GETFL) & ~os.O_NONBLOCK)
         ch.write(b'\x03\x04')
-        ch.shutdown(True)
+        ch.close()
         self.assertEqual(os.read(r, 10), b'\x03\x04')
         os.close(r)
 
@@ -415,13 +415,10 @@ second line
         self.assertEqual(cb_reads, [b'a', b'b'])
 
     def test_backwards_compat_flags(self):
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore', PyGIDeprecationWarning)
-
-            self.assertEqual(GLib.IOCondition.IN, GLib.IO_IN)
-            self.assertEqual(GLib.IOFlags.NONBLOCK, GLib.IO_FLAG_NONBLOCK)
-            self.assertEqual(GLib.IOFlags.IS_SEEKABLE, GLib.IO_FLAG_IS_SEEKABLE)
-            self.assertEqual(GLib.IOStatus.NORMAL, GLib.IO_STATUS_NORMAL)
+        self.assertEqual(GLib.IOCondition.IN, GLib.IO_IN)
+        self.assertEqual(GLib.IOFlags.NONBLOCK, GLib.IO_FLAG_NONBLOCK)
+        self.assertEqual(GLib.IOFlags.IS_SEEKABLE, GLib.IO_FLAG_IS_SEEKABLE)
+        self.assertEqual(GLib.IOStatus.NORMAL, GLib.IO_STATUS_NORMAL)
 
 if __name__ == '__main__':
     unittest.main()

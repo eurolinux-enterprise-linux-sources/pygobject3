@@ -1,13 +1,7 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 AUTOMAKE_OPTIONS = 1.7
 
-# Limit PyFlakes and PEP8 to these directories.
-pycheck_dirs = examples gi tests pygtkcompat
-
-# Part of the gi subdirectory is handled with non-recursive make to avoid
-# py-compile getting confused between gi/types.py and Python's standard
-# types module.
-SUBDIRS = . $(pycheck_dirs)
+SUBDIRS = examples gi tests pygtkcompat
 
 PLATFORM_VERSION = 3.0
 
@@ -23,8 +17,7 @@ EXTRA_DIST = \
 	pygi-convert.sh \
 	m4/as-ac-expand.m4 \
 	m4/jhflags.m4 \
-	m4/python.m4 \
-	setup.py
+	m4/python.m4
 
 MAINTAINERCLEANFILES = \
 	$(srcdir)/INSTALL \
@@ -56,37 +49,9 @@ MAINTAINERCLEANFILES = \
 BUILT_EXTRA_DIST = 		\
 	ChangeLog
 
-nobase_pyexec_PYTHON = \
-	gi/__init__.py \
-	gi/types.py \
-	gi/module.py \
-	gi/importer.py \
-	gi/pygtkcompat.py \
-	gi/docstring.py \
-	gi/_constants.py \
-	gi/_propertyhelper.py \
-	gi/_signalhelper.py \
-	gi/_option.py \
-	gi/_error.py
-
-# if we build in a separate tree, we need to symlink the *.py files from the
-# source tree; Python does not accept the extensions and modules in different
-# paths
-build_pylinks:
-	for f in $(nobase_pyexec_PYTHON); do \
-		[ -e $(builddir)/$$f ] || \
-			$(LN_S) $(abs_srcdir)/$$f $(builddir)/$$f; \
-	done
-
-all-local: build_pylinks
-
-check-local: build_pylinks
-
-if WITH_COMMON
 # pkg-config files
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = pygobject-$(PLATFORM_VERSION).pc
-endif
 
 # python
 pyexec_LTLIBRARIES =
@@ -132,7 +97,7 @@ release-news:
 
 	@echo -e "\n\n\nFor blogging, you can copy&paste this HTML formatted news:"
 	@echo "-------------- 8< -------------"
-	@last=`head -n1 $(top_srcdir)/NEWS | cut -f1 -d' '`; \
+	@last=`head -n1 NEWS | cut -f1 -d' '`; \
         echo "<ul>"; \
 	for commit in `git rev-list $$last..`; do \
 	   data=`git log --format="format:%s%n%an%n%b" $$commit^..$$commit`; \
@@ -143,15 +108,15 @@ release-news:
 	@echo "-------------- 8< -------------"
 
 	@echo >> NEWS.tmp
-	@cat $(top_srcdir)/NEWS >> NEWS.tmp
-	@mv NEWS.tmp $(top_srcdir)/NEWS
+	@cat NEWS >> NEWS.tmp
+	@mv NEWS.tmp NEWS
 
 .PHONY: ChangeLog release-news
 
 ChangeLog:
 	@echo Creating $@
 	@if test -d "$(srcdir)/.git"; then \
-	  (GIT_DIR=$(top_srcdir)/.git $(top_srcdir)/missing --run git log PYGOBJECT_2_17_0^^.. --stat) | fmt --split-only > $@.tmp \
+	  (GIT_DIR=$(top_srcdir)/.git ./missing --run git log PYGOBJECT_2_17_0^^.. --stat) | fmt --split-only > $@.tmp \
 	  && mv -f $@.tmp $@ \
 	  || ($(RM) $@.tmp; \
 	      echo Failed to generate ChangeLog, your ChangeLog may be outdated >&2; \
@@ -174,22 +139,6 @@ dist-hook: $(BUILT_EXTRA_DIST)
 	  if test -f $$f; then d=.; else d=$(srcdir); fi; \
 	  rm -f $(distdir)/$$f && cp $$d/$$f $(distdir) || exit 1; done
 
-# pycheck_subdirs = 
-
-check-local:
-	@echo "  CHECK  Pyflakes" $(pycheck_dirs)
-	@if type pyflakes >/dev/null 2>&1; then \
-		(cd $(abs_top_srcdir) && pyflakes $(pycheck_dirs) ); \
-	else echo "skipped, pyflakes not installed"; \
-	fi
-	@if test -z "$$SKIP_PEP8"; then \
-		echo "  CHECK  PEP8"; \
-		if type pep8 >/dev/null 2>&1; then \
-			(cd $(abs_top_srcdir) && pep8 --ignore=E501,E123,E124,E402,E731 --repeat --show-source $(pycheck_dirs) ); \
-		else echo "skipped, pep8 not installed"; \
-		fi; \
-	fi
-
 check.gdb:
 	cd tests && $(MAKE) check.gdb
 
@@ -198,11 +147,5 @@ check.nemiver:
 
 check.valgrind:
 	cd tests && $(MAKE) check.valgrind
-
-check.valgrindlog:
-	cd tests && $(MAKE) check.valgrindlog
-
-check.valgrindxml:
-	cd tests && $(MAKE) check.valgrindxml
 
 @GNOME_CODE_COVERAGE_RULES@

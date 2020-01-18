@@ -14,21 +14,17 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see <http://www.gnu.org/licenses/>.
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
+ * USA
  */
 
 #ifndef __PYGI_STRUCT_H__
 #define __PYGI_STRUCT_H__
 
 #include <Python.h>
-#include <pygobject-internal.h>
 
 G_BEGIN_DECLS
-
-typedef struct {
-    PyGPointer base;
-    gboolean free_on_dealloc;
-} PyGIStruct;
 
 extern PyTypeObject PyGIStruct_Type;
 
@@ -36,11 +32,6 @@ PyObject *
 _pygi_struct_new (PyTypeObject *type,
                   gpointer      pointer,
                   gboolean      free_on_dealloc);
-
-PyObject *
-_pygi_struct_new_from_g_type (GType g_type,
-                              gpointer      pointer,
-                              gboolean      free_on_dealloc);
 
 void _pygi_struct_register_types (PyObject *m);
 

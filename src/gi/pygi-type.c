@@ -16,11 +16,12 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see <http://www.gnu.org/licenses/>.
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
+ * USA
  */
 
-#include "pygtype.h"
-#include "pygi-type.h"
+#include "pygi-private.h"
 
 #include <pyglib-python-compat.h>
 
@@ -51,7 +52,7 @@ _pygi_type_import_by_name (const char *namespace_,
 }
 
 PyObject *
-pygi_type_import_by_g_type (GType g_type)
+pygi_type_import_by_g_type_real (GType g_type)
 {
     GIRepository *repository;
     GIBaseInfo *info;
@@ -90,11 +91,69 @@ _pygi_type_get_from_g_type (GType g_type)
 
     py_type = PyObject_GetAttrString (py_g_type, "pytype");
     if (py_type == Py_None) {
-        py_type = pygi_type_import_by_g_type (g_type);
+        py_type = pygi_type_import_by_g_type_real (g_type);
     }
 
     Py_DECREF (py_g_type);
 
     return py_type;
+}
+
+/* _pygi_get_py_type_hint
+ *
+ * This gives a hint to what python type might be used as
+ * a particular gi type.
+ */
+PyObject *
+_pygi_get_py_type_hint(GITypeTag type_tag)
+{
+    PyObject *type = Py_None;
+
+    switch (type_tag) {
+        case GI_TYPE_TAG_BOOLEAN:
+            type = (PyObject *) &PyBool_Type;
+            break;
+
+        case GI_TYPE_TAG_INT8:
+        case GI_TYPE_TAG_UINT8:
+        case GI_TYPE_TAG_INT16:
+        case GI_TYPE_TAG_UINT16:
+        case GI_TYPE_TAG_INT32:
+        case GI_TYPE_TAG_UINT32:
+        case GI_TYPE_TAG_INT64:
+        case GI_TYPE_TAG_UINT64:
+            type = (PyObject *) &PYGLIB_PyLong_Type;
+            break;
+
+        case GI_TYPE_TAG_FLOAT:
+        case GI_TYPE_TAG_DOUBLE:
+            type = (PyObject *) &PyFloat_Type;
+            break;
+
+        case GI_TYPE_TAG_GLIST:
+        case GI_TYPE_TAG_GSLIST:
+        case GI_TYPE_TAG_ARRAY:
+            type = (PyObject *) &PyList_Type;
+            break;
+
+        case GI_TYPE_TAG_GHASH:
+            type = (PyObject *) &PyDict_Type;
+            break;
+
+        case GI_TYPE_TAG_UTF8:
+        case GI_TYPE_TAG_FILENAME:
+        case GI_TYPE_TAG_UNICHAR:
+            type = (PyObject *) &PYGLIB_PyUnicode_Type;
+            break;
+
+        case GI_TYPE_TAG_INTERFACE:
+        case GI_TYPE_TAG_GTYPE:
+        case GI_TYPE_TAG_ERROR:
+        case GI_TYPE_TAG_VOID:
+            break;
+    }
+
+    Py_INCREF(type);
+    return type;
 }
 

@@ -12,25 +12,25 @@ AC_PREREQ([2.68])
 # You can also build against a full interpreter path, such as
 #   $ ./configure --with-python=~/my-patched-python/python
 
-m4_define(python_min_ver, 2.7)
+m4_define(python_min_ver, 2.6)
 m4_define(python3_min_ver, 3.1)
 
 dnl the pygobject version number
 m4_define(pygobject_major_version, 3)
-m4_define(pygobject_minor_version, 22)
-m4_define(pygobject_micro_version, 0)
+m4_define(pygobject_minor_version, 8)
+m4_define(pygobject_micro_version, 2)
 m4_define(pygobject_version, pygobject_major_version.pygobject_minor_version.pygobject_micro_version)
 
 dnl versions of packages we require ...
-m4_define(introspection_required_version, 1.46.0)
+m4_define(introspection_required_version, 1.34.2)
 m4_define(py2cairo_required_version, 1.2.0)
 m4_define(py3cairo_required_version, 1.10.0)
-m4_define(glib_required_version, 2.38.0)
-m4_define(gio_required_version, 2.38.0)
+m4_define(glib_required_version, 2.34.2)
+m4_define(gio_required_version, 2.34.2)
 
 AC_INIT([pygobject],[pygobject_version],
 	[http://bugzilla.gnome.org/enter_bug.cgi?product=pygobject],
-	[pygobject],[https://wiki.gnome.org/Projects/PyGObject/])
+	[pygobject],[https://live.gnome.org/PyGObject/])
 AC_SUBST(ACLOCAL_AMFLAGS, "-I m4 -I .")
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_SRCDIR([gi/gimodule.c])
@@ -44,38 +44,36 @@ AC_SUBST(PYGOBJECT_MICRO_VERSION, pygobject_micro_version)
 
 AC_CONFIG_HEADERS(config.h)
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES(yes)])
-# 1.12.6 to get a py-compile supporting newer Python 3 versions.
-# See https://debbugs.gnu.org/cgi/bugreport.cgi?bug=8847
-AM_INIT_AUTOMAKE([1.12.6 foreign no-dist-gzip dist-xz])
+AM_INIT_AUTOMAKE([1.11.1 foreign no-dist-gzip dist-xz])
 
 dnl put the ACLOCAL flags in the makefile
 ACLOCAL="$ACLOCAL $ACLOCAL_FLAGS"
 
 AC_CANONICAL_BUILD
 AC_CANONICAL_HOST
-AC_MSG_CHECKING([for build time linking with Python (Darwin and Win32)])
+AC_MSG_CHECKING([for some Win32 platform])
 case "$host" in
   *-*-mingw*|*-*-cygwin*)
-    os_win32=yes
-    link_python_libs=yes
-    OS_EXT=dll
+    platform_win32=yes
     ;;
-  *-*-darwin*)
-    os_win32=no
-    link_python_libs=yes
-    OS_EXT=dylib
+  *)
+    platform_win32=no
+    ;;
+esac
+AC_MSG_RESULT([$platform_win32])
+AM_CONDITIONAL(PLATFORM_WIN32, test "$platform_win32" = "yes")
+
+AC_MSG_CHECKING([for native Win32])
+case "$host" in
+  *-*-mingw*)
+    os_win32=yes
     ;;
   *)
     os_win32=no
-    link_python_libs=no
-    OS_EXT=so
     ;;
 esac
-AC_MSG_RESULT([$link_python_libs])
+AC_MSG_RESULT([$os_win32])
 AM_CONDITIONAL(OS_WIN32, test "$os_win32" = "yes")
-
-AC_SUBST(OS_EXT)
-AC_DEFINE_UNQUOTED(OS_EXT, "$OS_EXT", [Define shared library extension])
 
 LT_PREREQ([2.2.6])
 LT_INIT([dlopen win32-dll disable-static])
@@ -101,27 +99,21 @@ fi
 JD_PATH_PYTHON(python_min_ver)
 
 # check if we are building for python 3
-AM_PYTHON_CHECK_VERSION([$PYTHON], [3.0],
+JD_PYTHON_CHECK_VERSION([$PYTHON], [3.0],
 			 build_py3k=true,
 			 build_py3k=false)
 
 # if building for python 3 make sure we have the minimum version supported
 if test $build_py3k = true ; then
   AC_MSG_CHECKING([for $PYTHON >=] python3_min_ver)
-  AM_PYTHON_CHECK_VERSION([$PYTHON], python3_min_ver,
+  JD_PYTHON_CHECK_VERSION([$PYTHON], python3_min_ver,
 			  [AC_MSG_RESULT(yes)],
 			  [AC_MSG_ERROR(too old)])
 fi
 
-# - 'SO' for PyPy, CPython 2.7-3.2
-# - 'EXT_SUFFIX' for CPython3.3+ (http://bugs.python.org/issue16754)
-# - fallback to '.so'
-PYTHON_SO=`$PYTHON -c "import distutils.sysconfig, sys; get = distutils.sysconfig.get_config_var; sys.stdout.write(get('EXT_SUFFIX') or get('SO') or '.so');"`
-AC_SUBST(PYTHON_SO)
-
 AM_CHECK_PYTHON_HEADERS(, AC_MSG_ERROR([Python headers not found]))
-if test "x$link_python_libs" = "xyes"; then
-  AM_CHECK_PYTHON_LIBS(, AC_MSG_ERROR([Python libs not found. Windows and Darwin require Python modules to be explicitly linked to libpython.]))
+if test "x$os_win32" = "xyes"; then
+  AM_CHECK_PYTHON_LIBS(, AC_MSG_ERROR([Python libs not found. Windows requires Python modules to be explicitly linked to libpython.]))
 fi
 
 AC_MSG_CHECKING([for PySignal_SetWakeupFd in Python.h])
@@ -176,9 +168,23 @@ AC_SUBST([PYTHON_BASENAME])
 AS_AC_EXPAND(DATADIR, $datadir)
 
 dnl libffi
-PKG_CHECK_MODULES(FFI, libffi >= 3.0)
-LIBFFI_PC=libffi
-
+AC_MSG_CHECKING(for ffi)
+AC_ARG_WITH(ffi,
+  AS_HELP_STRING([--without-ffi],[Disable libffi support]),
+  with_libffi=$withval,
+  with_libffi=auto)
+if test x"$with_libffi" = xno ; then
+  have_libffi=false
+else
+  PKG_CHECK_MODULES(FFI, libffi >= 3.0, have_libffi=yes, have_libffi=no)
+fi
+if test x"$with_libffi" = xyes && test x"$have_libffi" = xno ; then
+  AC_MSG_ERROR([ffi requested, but not found])
+fi
+if test x"$have_libffi" = xyes; then
+  LIBFFI_PC=libffi
+fi
+AM_CONDITIONAL(HAVE_LIBFFI, test "$have_libffi" = "yes")
 AC_SUBST(FFI_CFLAGS)
 AC_SUBST(FFI_LIBS)
 AC_SUBST(LIBFFI_PC)
@@ -214,13 +220,6 @@ if test "$enable_cairo" != no; then
 fi
 AM_CONDITIONAL(ENABLE_CAIRO, test "$enable_cairo" = "yes")
 
-AC_ARG_WITH(common,
-    AS_HELP_STRING([--without-common],
-        [For package maintainers: do not install Python version independent files]),
-    with_common=$enableval,
-    with_common=yes)
-AM_CONDITIONAL(WITH_COMMON, test "$with_common" = "yes")
-
 INTROSPECTION_SCANNER=`$PKG_CONFIG --variable=g_ir_scanner gobject-introspection-1.0`
 INTROSPECTION_COMPILER=`$PKG_CONFIG --variable=g_ir_compiler gobject-introspection-1.0`
 
@@ -242,7 +241,15 @@ if test "x$GCC" = "xyes"; then
   JH_ADD_CFLAG([-Wall])
   JH_ADD_CFLAG([-Werror=unused-variable])
   JH_ADD_CFLAG([-fno-strict-aliasing])
-  JH_ADD_CFLAG([-Werror=declaration-after-statement])
+
+  case $host_os in
+  solaris*)
+    ;;
+  *)
+    JH_ADD_CFLAG([-std=c9x])
+    ;;
+  esac
+
 fi
 
 CFLAGS="$CFLAGS $WARN_CFLAGS $CODE_COVERAGE_CFLAGS"
@@ -255,6 +262,7 @@ AC_CONFIG_FILES(
   gi/Makefile
   gi/repository/Makefile
   gi/overrides/Makefile
+  gi/_glib/Makefile
   gi/_gobject/Makefile
   examples/Makefile
   tests/Makefile
@@ -266,6 +274,7 @@ AC_MSG_RESULT([
 	pygobject $VERSION
 
 	Using python interpreter:	$PYTHON
+	libffi support:			$have_libffi
 	cairo support:			$enable_cairo
 	thread support:			$enable_thread
 	code coverage support:          $enable_code_coverage
