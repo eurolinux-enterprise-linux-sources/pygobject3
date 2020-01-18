@@ -22,7 +22,7 @@
 
 Name: pygobject3
 Version: 3.8.2
-Release: 4%{?dist}
+Release: 6%{?dist}
 License: LGPLv2+ and MIT
 Group: Development/Languages
 Summary: Python 2 bindings for GObject Introspection
@@ -74,6 +74,14 @@ Patch3: test-list-marshalling.patch
 # Filed upstream as:
 #  https://bugzilla.gnome.org/show_bug.cgi?id=697138
 Patch5: pygobject-3.8.0-known-failures.txt
+
+# Re-add support for passing GValue's by reference
+# https://bugzilla.gnome.org/show_bug.cgi?id=701058
+Patch6: pygobject-3.8.2-pass-gvalues-by-reference.patch
+
+# Fix memory leak for caller allocated GValue out arguments
+# https://bugzilla.gnome.org/show_bug.cgi?id=709397
+Patch7: pygobject-3.8.2-gvalue-memory-leak.patch
 
 ### Build Dependencies ###
 
@@ -160,6 +168,8 @@ for use in Python 3 programs.
 %patch2 -p1 -b .known-failures
 %patch3 -p1 -b .test-list-marshalling
 %patch5 -p1
+%patch6 -p1 -b .pass-gvalues-by-reference
+%patch7 -p1 -b .gvalue-memory-leak
 
 %if 0%{?with_python3}
 rm -rf %{py3dir}
@@ -271,6 +281,14 @@ xvfb-run make DESTDIR=$RPM_BUILD_ROOT check %{verbosity}
 %endif # with_python3
 
 %changelog
+* Fri Sep 26 2014 Matthew Barnes <mbarnes@redhat.com> - 3.8.2-6
+- Fix memory leak for caller allocated GValue out arguments.
+- Resolves: rhbz#1015413
+
+* Mon Sep 15 2014 Matthew Barnes <mbarnes@redhat.com> - 3.8.2-5
+- Re-add support for passing GValue's by reference.
+- Resolves: rhbz#1138372
+
 * Fri Jan 24 2014 Daniel Mach <dmach@redhat.com> - 3.8.2-4
 - Mass rebuild 2014-01-24
 
