@@ -12,7 +12,7 @@
 
 Name:           pygobject3
 Version:        3.22.0
-Release:        1%{?dist}
+Release:        1%{?dist}.1
 Summary:        Python bindings for GObject Introspection
 
 License:        LGPLv2+ and MIT
@@ -221,6 +221,9 @@ xvfb-run make DESTDIR=$RPM_BUILD_ROOT check V=1
 %{_libdir}/pkgconfig/pygobject-3.0.pc
 
 %changelog
+* Thu Nov 09 2017 John Francini - 3.22.0-1.1
+- Bump release to allow rebuild to fix BZ#1510160
+
 * Mon Sep 19 2016 Kalev Lember <klember@redhat.com> - 3.22.0-1
 - Update to 3.22.0
 - Resolves: #1387039
