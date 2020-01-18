@@ -1,0 +1,79 @@
+diff -up pygobject-3.14.0/gi/__init__.py.allow-static-module-import pygobject-3.14.0/gi/__init__.py
+--- pygobject-3.14.0/gi/__init__.py.allow-static-module-import	2014-09-10 18:10:32.000000000 -0400
++++ pygobject-3.14.0/gi/__init__.py	2015-09-15 12:23:51.240053648 -0400
+@@ -27,17 +27,12 @@ __path__ = extend_path(__path__, __name_
+ import sys
+ import os
+ import importlib
+-import types
+-
+-_static_binding_error = ('When using gi.repository you must not import static '
+-                         'modules like "gobject". Please change all occurrences '
+-                         'of "import gobject" to "from gi.repository import GObject". '
+-                         'See: https://bugzilla.gnome.org/show_bug.cgi?id=709183')
+ 
+ # we can't have pygobject 2 loaded at the same time we load the internal _gobject
+ if 'gobject' in sys.modules:
+-    raise ImportError(_static_binding_error)
+-
++    raise ImportError('When using gi.repository you must not import static '
++                      'modules like "gobject". Please change all occurrences '
++                      'of "import gobject" to "from gi.repository import GObject".')
+ 
+ from . import _gi
+ from ._gi import _gobject
+@@ -55,20 +50,6 @@ version_info = _gobject.pygobject_versio
+ __version__ = "{0}.{1}.{2}".format(*version_info)
+ 
+ 
+-class _DummyStaticModule(types.ModuleType):
+-    __path__ = None
+-
+-    def __getattr__(self, name):
+-        raise AttributeError(_static_binding_error)
+-
+-
+-sys.modules['glib'] = _DummyStaticModule('glib', _static_binding_error)
+-sys.modules['gobject'] = _DummyStaticModule('gobject', _static_binding_error)
+-sys.modules['gio'] = _DummyStaticModule('gio', _static_binding_error)
+-sys.modules['gtk'] = _DummyStaticModule('gtk', _static_binding_error)
+-sys.modules['gtk.gdk'] = _DummyStaticModule('gtk.gdk', _static_binding_error)
+-
+-
+ def check_version(version):
+     if isinstance(version, str):
+         version_list = tuple(map(int, version.split(".")))
+diff -up pygobject-3.14.0/tests/test_import_machinery.py.allow-static-module-import pygobject-3.14.0/tests/test_import_machinery.py
+--- pygobject-3.14.0/tests/test_import_machinery.py.allow-static-module-import	2015-09-15 12:24:21.601235349 -0400
++++ pygobject-3.14.0/tests/test_import_machinery.py	2015-09-15 12:24:47.674390896 -0400
+@@ -58,30 +58,6 @@ class TestModule(unittest.TestCase):
+         # Restore the previous cache
+         gi.module._introspection_modules = old_modules
+ 
+-    def test_static_binding_protection(self):
+-        # Importing old static bindings once gi has been imported should not
+-        # crash but instead give back a dummy module which produces RuntimeErrors
+-        # on access.
+-        with self.assertRaises(AttributeError):
+-            import gobject
+-            gobject.anything
+-
+-        with self.assertRaises(AttributeError):
+-            import glib
+-            glib.anything
+-
+-        with self.assertRaises(AttributeError):
+-            import gio
+-            gio.anything
+-
+-        with self.assertRaises(AttributeError):
+-            import gtk
+-            gtk.anything
+-
+-        with self.assertRaises(AttributeError):
+-            import gtk.gdk
+-            gtk.gdk.anything
+-
+ 
+ class TestImporter(unittest.TestCase):
+     def test_invalid_repository_module_name(self):
