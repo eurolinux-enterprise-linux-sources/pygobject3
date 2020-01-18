@@ -158,6 +158,8 @@ typedef struct _PyGIInterfaceCache
 struct _PyGICallableCache
 {
     const gchar *name;
+    const gchar *container_name;
+    const gchar *namespace;
 
     PyGICallingContext calling_context;
 
@@ -168,6 +170,9 @@ struct _PyGICallableCache
     GHashTable *arg_name_hash;
     gboolean throws;
 
+    /* Index of user_data arg passed to a callable. */
+    gssize user_data_index;
+
     /* Index of user_data arg that can eat variable args passed to a callable. */
     gssize user_data_varargs_index;
 
@@ -177,6 +182,12 @@ struct _PyGICallableCache
     /* Number of out args passed to g_function_info_invoke.
      * This is used for the length of PyGIInvokeState.out_values */
     gssize n_to_py_args;
+
+    /* If the callable return value gets used */
+    gboolean has_return;
+
+    /* The type used for returning multiple values or NULL */
+    PyTypeObject* resulttuple_type;
 
     /* Number of out args for g_function_info_invoke that will be skipped
      * when marshaling to Python due to them being implicitly available
@@ -197,7 +208,7 @@ struct _PyGICallableCache
                                      GICallableInfo *callable_info);
 };
 
-typedef struct _PyGIFunctionCache {
+struct _PyGIFunctionCache {
     PyGICallableCache callable_cache;
 
     /* An invoker with ffi_cif already setup */
@@ -207,13 +218,13 @@ typedef struct _PyGIFunctionCache {
                          PyGIInvokeState *state,
                          PyObject *py_args,
                          PyObject *py_kwargs);
-} PyGIFunctionCache;
+} ;
 
-typedef struct _PyGIVFuncCache {
+struct _PyGIVFuncCache {
     PyGIFunctionWithInstanceCache fwi_cache;
 
     GIBaseInfo *info;
-} PyGIVFuncCache;
+};
 
 
 gboolean
@@ -264,6 +275,9 @@ pygi_arg_cache_free      (PyGIArgCache *cache);
 
 void
 pygi_callable_cache_free    (PyGICallableCache *cache);
+
+gchar *
+pygi_callable_cache_get_full_name (PyGICallableCache *cache);
 
 PyGIFunctionCache *
 pygi_function_cache_new     (GICallableInfo *info);

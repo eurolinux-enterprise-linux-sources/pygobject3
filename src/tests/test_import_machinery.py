@@ -6,6 +6,7 @@ import unittest
 
 import gi.overrides
 import gi.module
+import gi.importer
 
 try:
     from gi.repository import Regress
@@ -14,7 +15,8 @@ except ImportError:
     Regress = None
 
 
-class TestRegistry(unittest.TestCase):
+class TestOverrides(unittest.TestCase):
+
     def test_non_gi(self):
         class MyClass:
             pass
@@ -30,6 +32,29 @@ class TestRegistry(unittest.TestCase):
         # Regress override is in tests/gi/overrides, separate from gi/overrides
         # https://bugzilla.gnome.org/show_bug.cgi?id=680913
         self.assertEqual(Regress.REGRESS_OVERRIDE, 42)
+
+    def test_load_overrides(self):
+        mod = gi.module.get_introspection_module('GIMarshallingTests')
+        mod_override = gi.overrides.load_overrides(mod)
+        self.assertTrue(mod_override is not mod)
+        self.assertTrue(mod_override._introspection_module is mod)
+        self.assertEqual(mod_override.OVERRIDES_CONSTANT, 7)
+        self.assertEqual(mod.OVERRIDES_CONSTANT, 42)
+
+    def test_load_no_overrides(self):
+        mod_key = "gi.overrides.GIMarshallingTests"
+        had_mod = mod_key in sys.modules
+        old_mod = sys.modules.get(mod_key)
+        try:
+            # this makes override import fail
+            sys.modules[mod_key] = None
+            mod = gi.module.get_introspection_module('GIMarshallingTests')
+            mod_override = gi.overrides.load_overrides(mod)
+            self.assertTrue(mod_override is mod)
+        finally:
+            del sys.modules[mod_key]
+            if had_mod:
+                sys.modules[mod_key] = old_mod
 
 
 class TestModule(unittest.TestCase):
@@ -49,14 +74,21 @@ class TestModule(unittest.TestCase):
         mod2 = gi.module.get_introspection_module(mod_name)
         self.assertTrue(mod1 is mod2)
 
-        # Using a DynamicModule will use get_introspection_module internally
-        # in its _load method.
-        mod_overridden = gi.module.DynamicModule(mod_name)
-        mod_overridden._load()
-        self.assertTrue(mod1 is mod_overridden._introspection_module)
-
         # Restore the previous cache
         gi.module._introspection_modules = old_modules
+
+    def test_module_dependency_loading(self):
+        # Difficult to because this generally need to run in isolation to make
+        # sure GIMarshallingTests has not yet been loaded. But we can do this with:
+        #  make check TEST_NAMES=test_import_machinery.TestModule.test_module_dependency_loading
+        if 'gi.repository.Gio' in sys.modules:
+            return
+
+        from gi.repository import GIMarshallingTests
+        GIMarshallingTests  # PyFlakes
+
+        self.assertIn('gi.repository.Gio', sys.modules)
+        self.assertIn('gi.repository.GIMarshallingTests', sys.modules)
 
     def test_static_binding_protection(self):
         # Importing old static bindings once gi has been imported should not
@@ -93,8 +125,32 @@ class TestImporter(unittest.TestCase):
 
         self.assertTrue('InvalidGObjectRepositoryModuleName' in exception_string)
 
-        # The message of the custom exception in gi/importer.py is eaten in Python 2.7
-        if sys.version_info.major < 3:
+        # The message of the custom exception in gi/importer.py is eaten in Python <3.3
+        if sys.version_info < (3, 3):
             self.assertTrue('introspection typelib' not in exception_string)
         else:
             self.assertTrue('introspection typelib' in exception_string)
+
+    def test_require_version_warning(self):
+        check = gi.importer._check_require_version
+
+        # make sure it doesn't fail at least
+        with check("GLib", 1):
+            from gi.repository import GLib
+            GLib
+
+        # make sure the exception propagates
+        with self.assertRaises(ImportError):
+            with check("InvalidGObjectRepositoryModuleName", 1):
+                from gi.repository import InvalidGObjectRepositoryModuleName
+                InvalidGObjectRepositoryModuleName
+
+    def test_require_versions(self):
+        import gi
+        gi.require_versions({'GLib': '2.0', 'Gio': '2.0', 'GObject': '2.0'})
+        from gi.repository import GLib
+        GLib
+
+    def test_get_import_stacklevel(self):
+        gi.importer.get_import_stacklevel(import_hook=True)
+        gi.importer.get_import_stacklevel(import_hook=False)

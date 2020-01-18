@@ -1,39 +1,14 @@
-/* -*- Mode: C; c-basic-offset: 4 -*-
- * vim: tabstop=4 shiftwidth=4 expandtab
- */
-#ifndef __PYGI_PRIVATE_H__
-#define __PYGI_PRIVATE_H__
+#ifndef __PYGI_UTIL_H__
+#define __PYGI_UTIL_H__
 
-#ifdef __PYGI_H__
-#   error "Import pygi.h or pygi-private.h, but not both"
-#endif
-
-#ifdef HAVE_CONFIG_H
-#   include <config.h>
-#endif
-
-#include <Python.h>
-
-#include "pygi.h"
-
-#include "pygobject-private.h"
-
-#include "pygi-repository.h"
-#include "pygi-info.h"
-#include "pygi-struct.h"
-#include "pygi-boxed.h"
-#include "pygi-argument.h"
-#include "pygi-type.h"
-#include "pygi-foreign.h"
-#include "pygi-closure.h"
-#include "pygi-ccallback.h"
-#include "pygi-property.h"
-#include "pygi-signal-closure.h"
-#include "pygi-invoke.h"
-#include "pygi-cache.h"
-#include "pygi-source.h"
+#include <glib.h>
+#include "pygobject-internal.h"
+#include <pyglib-python-compat.h>
 
 G_BEGIN_DECLS
+
+PyObject * pyg_integer_richcompare(PyObject *v, PyObject *w, int op);
+
 #if PY_VERSION_HEX >= 0x03000000
 
 #define _PyGI_ERROR_PREFIX(format, ...) G_STMT_START { \
@@ -75,13 +50,6 @@ G_BEGIN_DECLS
 
 #endif
 
-/* Redefine g_array_index because we want it to return the i-th element, casted
- * to the type t, of the array a, and not the i-th element of the array a
- * casted to the type t. */
-#define _g_array_index(a,t,i) \
-    *(t *)((a)->data + g_array_get_element_size(a) * (i))
-
-
 G_END_DECLS
 
-#endif /* __PYGI_PRIVATE_H__ */
+#endif /* __PYGI_UTIL_H__ */

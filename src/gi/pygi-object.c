@@ -18,12 +18,12 @@
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <glib.h>
 #include <Python.h>
+#include <glib.h>
 #include <pyglib-python-compat.h>
 
 #include "pygi-object.h"
-#include "pygi-private.h"
+#include "pygobject-object.h"
 #include "pygparamspec.h"
 
 /*

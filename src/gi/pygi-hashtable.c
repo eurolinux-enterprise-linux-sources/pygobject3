@@ -18,9 +18,10 @@
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <Python.h>
 #include "pygi-hashtable.h"
 #include "pygi-argument.h"
-#include "pygi-private.h"
+#include "pygi-util.h"
 
 typedef struct _PyGIHashCache
 {
@@ -133,8 +134,8 @@ _pygi_marshal_from_py_ghash (PyGIInvokeState   *state,
             goto err;
 
         g_hash_table_insert (hash_,
-                             _pygi_arg_to_hash_pointer (&key, hash_cache->key_cache->type_tag),
-                             _pygi_arg_to_hash_pointer (&value, hash_cache->value_cache->type_tag));
+                             _pygi_arg_to_hash_pointer (&key, hash_cache->key_cache->type_info),
+                             _pygi_arg_to_hash_pointer (&value, hash_cache->value_cache->type_info));
         continue;
 err:
         /* FIXME: cleanup hash keys and values */
@@ -263,7 +264,7 @@ _pygi_marshal_to_py_ghash (PyGIInvokeState   *state,
         int retval;
 
 
-        _pygi_hash_pointer_to_arg (&key_arg, hash_cache->key_cache->type_tag);
+        _pygi_hash_pointer_to_arg (&key_arg, hash_cache->key_cache->type_info);
         py_key = key_to_py_marshaller ( state,
                                       callable_cache,
                                       key_arg_cache,
@@ -274,7 +275,7 @@ _pygi_marshal_to_py_ghash (PyGIInvokeState   *state,
             return NULL;
         }
 
-        _pygi_hash_pointer_to_arg (&value_arg, hash_cache->value_cache->type_tag);
+        _pygi_hash_pointer_to_arg (&value_arg, hash_cache->value_cache->type_info);
         py_value = value_to_py_marshaller ( state,
                                           callable_cache,
                                           value_arg_cache,

@@ -9,16 +9,20 @@ import sys
 import warnings
 
 from compathelper import _unicode, _bytes
+from helper import ignore_gi_deprecation_warnings, capture_glib_warnings
 
+import gi
 import gi.overrides
 import gi.types
 from gi.repository import GLib, GObject
 
 try:
-    from gi.repository import GdkPixbuf, Gdk, Gtk
+    gi.require_version('Gtk', '3.0')
+    gi.require_version('GdkPixbuf', '2.0')
+    from gi.repository import Gtk, GdkPixbuf, Gdk
     Gtk  # pyflakes
     PyGTKDeprecationWarning = Gtk.PyGTKDeprecationWarning
-except ImportError:
+except (ValueError, ImportError):
     Gtk = None
     PyGTKDeprecationWarning = None
 
@@ -55,16 +59,8 @@ def realized(widget):
         Gtk.main_iteration()
 
 
-@contextlib.contextmanager
-def ignore_glib_warnings():
-    """Temporarily change GLib logging to not bail on warnings."""
-    old_mask = GLib.log_set_always_fatal(
-        GLib.LogLevelFlags.LEVEL_CRITICAL | GLib.LogLevelFlags.LEVEL_ERROR)
-    yield
-    GLib.log_set_always_fatal(old_mask)
-
-
 @unittest.skipUnless(Gtk, 'Gtk not available')
+@ignore_gi_deprecation_warnings
 class TestGtk(unittest.TestCase):
     def test_container(self):
         box = Gtk.Box()
@@ -316,7 +312,7 @@ class TestGtk(unittest.TestCase):
 
     def test_file_chooser_dialog(self):
         # might cause a GVFS warning, do not break on this
-        with ignore_glib_warnings():
+        with capture_glib_warnings(allow_warnings=True):
             dialog = Gtk.FileChooserDialog(title='file chooser dialog test',
                                            action=Gtk.FileChooserAction.SAVE)
 
@@ -329,7 +325,7 @@ class TestGtk(unittest.TestCase):
 
     def test_file_chooser_dialog_default_action(self):
         # might cause a GVFS warning, do not break on this
-        with ignore_glib_warnings():
+        with capture_glib_warnings(allow_warnings=True):
             dialog = Gtk.FileChooserDialog(title='file chooser dialog test')
 
         action = dialog.get_property('action')
@@ -372,7 +368,7 @@ class TestGtk(unittest.TestCase):
         self.assertTrue(isinstance(button, Gtk.Widget))
 
         # Using stock items causes hard warning in devel versions of GTK+.
-        with ignore_glib_warnings():
+        with capture_glib_warnings(allow_warnings=True):
             button = Gtk.Button.new_from_stock(Gtk.STOCK_CLOSE)
 
         self.assertEqual(Gtk.STOCK_CLOSE, button.get_label())
@@ -520,9 +516,9 @@ class TestGtk(unittest.TestCase):
         widget.drag_source_add_image_targets()
         widget.drag_source_add_text_targets()
         widget.drag_source_add_uri_targets()
-        widget.drag_source_set_icon_name("")
+        widget.drag_source_set_icon_name("_About")
         widget.drag_source_set_icon_pixbuf(GdkPixbuf.Pixbuf())
-        widget.drag_source_set_icon_stock("")
+        widget.drag_source_set_icon_stock(Gtk.STOCK_ABOUT)
         widget.drag_source_get_target_list()
         widget.drag_source_set_target_list(None)
         widget.drag_source_set_target_list(Gtk.TargetList.new([Gtk.TargetEntry.new('test', 0, 0)]))
@@ -591,7 +587,7 @@ class TestGtk(unittest.TestCase):
         # PyGTK compat
 
         # Using stock items causes hard warning in devel versions of GTK+.
-        with ignore_glib_warnings():
+        with capture_glib_warnings(allow_warnings=True):
             button = Gtk.ToolButton()
             self.assertEqual(button.props.stock_id, None)
 
@@ -696,6 +692,7 @@ class TestSignals(unittest.TestCase):
 
         with realized(win):
             win.show()
+            win.get_preferred_size()
             win.size_allocate(rect)
             self.assertTrue(win._alloc_called)
             self.assertIsInstance(win._alloc_value, Gdk.Rectangle)
@@ -855,6 +852,7 @@ class TestBuilder(unittest.TestCase):
         self.assertEqual(signal_checker.after_sentinel, 2)
 
 
+@ignore_gi_deprecation_warnings
 @unittest.skipUnless(Gtk, 'Gtk not available')
 class TestTreeModel(unittest.TestCase):
     def test_tree_model_sort(self):
@@ -905,8 +903,8 @@ class TestTreeModel(unittest.TestCase):
                                                 i % 2,
                                                 bool(i % 2),
                                                 i,
-                                                GObject.G_MAXULONG,
-                                                GObject.G_MININT64,
+                                                GLib.MAXULONG,
+                                                GLib.MININT64,
                                                 0xffffffffffffffff,
                                                 254,
                                                 _bytes('a')
@@ -927,8 +925,8 @@ class TestTreeModel(unittest.TestCase):
                        7, i % 2,
                        8, bool(i % 2),
                        9, i,
-                       10, GObject.G_MAXULONG,
-                       11, GObject.G_MININT64,
+                       10, GLib.MAXULONG,
+                       11, GLib.MININT64,
                        12, 0xffffffffffffffff,
                        13, 254,
                        14, _bytes('a'))
@@ -947,8 +945,8 @@ class TestTreeModel(unittest.TestCase):
                                 7: i % 2,
                                 8: bool(i % 2),
                                 9: i,
-                                10: GObject.G_MAXULONG,
-                                11: GObject.G_MININT64,
+                                10: GLib.MAXULONG,
+                                11: GLib.MININT64,
                                 12: 0xffffffffffffffff,
                                 13: 254,
                                 14: _bytes('a')})
@@ -968,8 +966,8 @@ class TestTreeModel(unittest.TestCase):
                                 i % 2,
                                 bool(i % 2),
                                 i,
-                                GObject.G_MAXULONG,
-                                GObject.G_MININT64,
+                                GLib.MAXULONG,
+                                GLib.MININT64,
                                 0xffffffffffffffff,
                                 254,
                                 _bytes('a')))
@@ -1008,9 +1006,9 @@ class TestTreeModel(unittest.TestCase):
             uint_ = tree_store.get_value(treeiter, 9)
             self.assertEqual(uint_, i)
             ulong_ = tree_store.get_value(treeiter, 10)
-            self.assertEqual(ulong_, GObject.G_MAXULONG)
+            self.assertEqual(ulong_, GLib.MAXULONG)
             int64_ = tree_store.get_value(treeiter, 11)
-            self.assertEqual(int64_, GObject.G_MININT64)
+            self.assertEqual(int64_, GLib.MININT64)
             uint64_ = tree_store.get_value(treeiter, 12)
             self.assertEqual(uint64_, 0xffffffffffffffff)
             uchar_ = tree_store.get_value(treeiter, 13)
@@ -1588,6 +1586,52 @@ class TestTreeModel(unittest.TestCase):
             model[0][:2] = ("0", 0)
 
         self.assertRaises(TypeError, set_row3)
+
+    def test_tree_row_sequence(self):
+        model = Gtk.ListStore(int, str, float)
+        model.append([1, "one", -0.1])
+
+        self.assertEqual([1, "one", -0.1], model[0][0, 1, 2])
+        self.assertEqual([1, "one"], model[0][0, 1])
+        self.assertEqual(["one", -0.1], model[0][1, 2])
+        self.assertEqual("one", model[0][1])
+        self.assertEqual([1, -0.1], model[0][0, 2])
+        self.assertEqual([-0.1, 1], model[0][2, 0])
+
+        model[0][0, 1, 2] = (2, "two", -0.2)
+        self.assertEqual([2, "two", -0.2], model[0][0, 1, 2])
+
+        model[0][0, 1] = (3, "three")
+        self.assertEqual([3, "three"], model[0][0, 1])
+
+        model[0][1, 2] = ("four", -0.4)
+        self.assertEqual(["four", -0.4], model[0][1, 2])
+
+        model[0][0, 2] = (5, -0.5)
+        self.assertEqual([5, -0.5], model[0][0, 2])
+
+        model[0][0, 1, 2] = (6, "six", -0.6)
+        self.assertEqual([-0.6, 6, "six"], model[0][2, 0, 1])
+
+        def set_row1():
+            model[0][4, 5] = ("shouldn't", "work",)
+
+        self.assertRaises(IndexError, set_row1)
+
+        def set_row2():
+            model[0][0, 1] = (0, "zero", 0)
+
+        self.assertRaises(ValueError, set_row2)
+
+        def set_row3():
+            model[0][0, 1] = ("shouldn't", 0)
+
+        self.assertRaises(TypeError, set_row3)
+
+        def set_row4():
+            model[0][0, "two"] = (0, "zero")
+
+        self.assertRaises(TypeError, set_row4)
 
     def test_tree_model_set_value_to_none(self):
         # Tests allowing the usage of None to set an empty value on a model.

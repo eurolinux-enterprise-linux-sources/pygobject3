@@ -19,7 +19,8 @@
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "pygi-private.h"
+#include "pygi-repository.h"
+#include "pygi-info.h"
 
 #include <pyglib-python-compat.h>
 
@@ -105,6 +106,24 @@ _wrap_g_irepository_require (PyGIRepository *self,
     }
 
     Py_RETURN_NONE;
+}
+
+static PyObject *
+_wrap_g_irepository_is_registered (PyGIRepository *self,
+                                   PyObject       *args,
+                                   PyObject       *kwargs)
+{
+    static char *kwlist[] = { "namespace", "version", NULL };
+    const char *namespace_;
+    const char *version = NULL;
+
+    if (!PyArg_ParseTupleAndKeywords (args, kwargs, "s|z:Repository.is_registered",
+                                      kwlist, &namespace_, &version)) {
+        return NULL;
+    }
+
+    return PyBool_FromLong (g_irepository_is_registered (self->repository,
+                                                         namespace_, version));
 }
 
 static PyObject *
@@ -267,6 +286,74 @@ _wrap_g_irepository_get_loaded_namespaces (PyGIRepository *self)
     return py_namespaces;
 }
 
+static PyObject *
+_wrap_g_irepository_get_dependencies (PyGIRepository *self,
+                                      PyObject       *args,
+                                      PyObject       *kwargs)
+{
+    static char *kwlist[] = { "namespace", NULL };
+    const char *namespace_;
+    char **namespaces;
+    PyObject *py_namespaces;
+    gssize i;
+
+    if (!PyArg_ParseTupleAndKeywords (args, kwargs,
+                                      "s:Repository.get_dependencies", kwlist, &namespace_)) {
+        return NULL;
+    }
+
+    py_namespaces = PyList_New (0);
+    /* Returns NULL in case of no dependencies */
+    namespaces = g_irepository_get_dependencies (self->repository, namespace_);
+    if (namespaces == NULL) {
+        return py_namespaces;
+    }
+
+    for (i = 0; namespaces[i] != NULL; i++) {
+        PyObject *py_namespace = PYGLIB_PyUnicode_FromString (namespaces[i]);
+        PyList_Append (py_namespaces, py_namespace);
+        Py_DECREF(py_namespace);
+    }
+
+    g_strfreev (namespaces);
+
+    return py_namespaces;
+}
+
+
+static PyObject *
+_wrap_g_irepository_get_immediate_dependencies (PyGIRepository *self,
+                                                PyObject       *args,
+                                                PyObject       *kwargs)
+{
+    static char *kwlist[] = { "namespace", NULL };
+    const char *namespace_;
+    char **namespaces;
+    PyObject *py_namespaces;
+    gssize i;
+
+    if (!PyArg_ParseTupleAndKeywords (args, kwargs,
+                                      "s:Repository.get_immediate_dependencies",
+                                      kwlist, &namespace_)) {
+        return NULL;
+    }
+
+    py_namespaces = PyList_New (0);
+    namespaces = g_irepository_get_immediate_dependencies (self->repository,
+                                                           namespace_);
+
+    for (i = 0; namespaces[i] != NULL; i++) {
+        PyObject *py_namespace = PYGLIB_PyUnicode_FromString (namespaces[i]);
+        PyList_Append (py_namespaces, py_namespace);
+        Py_DECREF (py_namespace);
+    }
+
+    g_strfreev (namespaces);
+
+    return py_namespaces;
+}
+
+
 static PyMethodDef _PyGIRepository_methods[] = {
     { "enumerate_versions", (PyCFunction) _wrap_g_irepository_enumerate_versions, METH_VARARGS | METH_KEYWORDS },
     { "get_default", (PyCFunction) _wrap_g_irepository_get_default, METH_STATIC | METH_NOARGS },
@@ -276,6 +363,9 @@ static PyMethodDef _PyGIRepository_methods[] = {
     { "get_typelib_path", (PyCFunction) _wrap_g_irepository_get_typelib_path, METH_VARARGS | METH_KEYWORDS },
     { "get_version", (PyCFunction) _wrap_g_irepository_get_version, METH_VARARGS | METH_KEYWORDS },
     { "get_loaded_namespaces", (PyCFunction) _wrap_g_irepository_get_loaded_namespaces, METH_NOARGS },
+    { "get_dependencies", (PyCFunction) _wrap_g_irepository_get_dependencies, METH_VARARGS | METH_KEYWORDS  },
+    { "get_immediate_dependencies", (PyCFunction) _wrap_g_irepository_get_immediate_dependencies, METH_VARARGS | METH_KEYWORDS  },
+    { "is_registered", (PyCFunction) _wrap_g_irepository_is_registered, METH_VARARGS | METH_KEYWORDS  },
     { NULL, NULL, 0 }
 };
 

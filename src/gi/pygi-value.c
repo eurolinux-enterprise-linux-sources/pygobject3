@@ -16,10 +16,16 @@
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <Python.h>
 #include "pygi-value.h"
+#include "pygi-struct.h"
 #include "pyglib-python-compat.h"
-#include "pygobject-private.h"
+#include "pygobject-object.h"
 #include "pygtype.h"
+#include "pygenum.h"
+#include "pygpointer.h"
+#include "pygboxed.h"
+#include "pygflags.h"
 #include "pygparamspec.h"
 
 GIArgument
@@ -382,7 +388,7 @@ pyg_value_from_pyobject_with_error(GValue *value, PyObject *obj)
     case G_TYPE_UINT:
     {
         if (PYGLIB_PyLong_Check(obj)) {
-            guint val;
+            gulong val;
 
             /* check that number is not negative */
             if (PyLong_AsLongLong(obj) < 0)
@@ -390,7 +396,7 @@ pyg_value_from_pyobject_with_error(GValue *value, PyObject *obj)
 
             val = PyLong_AsUnsignedLong(obj);
             if (val <= G_MAXUINT)
-                g_value_set_uint(value, val);
+                g_value_set_uint(value, (guint) val);
             else
                 return -1;
         } else {
@@ -774,9 +780,10 @@ pygi_value_to_py_structured_type (const GValue *value, GType fundamental, gboole
             return pyg_value_as_pyobject(n_value, copy_boxed);
         } else if (holds_value_array) {
             GValueArray *array = (GValueArray *) g_value_get_boxed(value);
-            PyObject *ret = PyList_New(array->n_values);
+            Py_ssize_t n_values = array ? array->n_values : 0;
+            PyObject *ret = PyList_New(n_values);
             int i;
-            for (i = 0; i < array->n_values; ++i)
+            for (i = 0; i < n_values; ++i)
                 PyList_SET_ITEM(ret, i, pyg_value_as_pyobject
                         (array->values + i, copy_boxed));
             return ret;
@@ -808,7 +815,7 @@ pygi_value_to_py_structured_type (const GValue *value, GType fundamental, gboole
             Py_INCREF(Py_None);
             return Py_None;
         }
-        return pyg_boxed_new(G_TYPE_VARIANT, g_variant_ref(v), FALSE, FALSE);
+        return _pygi_struct_new_from_g_type (G_TYPE_VARIANT, g_variant_ref(v), FALSE);
     }
     default:
     {
@@ -831,13 +838,13 @@ pygi_value_to_py_structured_type (const GValue *value, GType fundamental, gboole
  * This function creates/returns a Python wrapper object that
  * represents the GValue passed as an argument.
  *
- * Returns: a PyObject representing the value.
+ * Returns: a PyObject representing the value or %NULL and sets an exception.
  */
 PyObject *
 pyg_value_as_pyobject (const GValue *value, gboolean copy_boxed)
 {
-    gchar buf[128];
     PyObject *pyobj;
+    const gchar *type_name;
     GType fundamental = G_TYPE_FUNDAMENTAL (G_VALUE_TYPE (value));
 
     /* HACK: special case char and uchar to return PyBytes intstead of integers
@@ -862,10 +869,16 @@ pyg_value_as_pyobject (const GValue *value, gboolean copy_boxed)
         return pyobj;
     }
 
-    g_snprintf(buf, sizeof(buf), "unknown type %s",
-               g_type_name(G_VALUE_TYPE(value)));
-    PyErr_SetString(PyExc_TypeError, buf);
+    if (!PyErr_Occurred ()) {
+        type_name = g_type_name (G_VALUE_TYPE (value));
+        if (type_name == NULL) {
+            type_name = "(null)";
+        }
+        PyErr_Format (PyExc_TypeError, "unknown type %s", type_name);
+    }
+
     return NULL;
+
 }
 
 
@@ -933,17 +946,40 @@ pyg_strv_to_gvalue(GValue *value, PyObject *obj)
     Py_ssize_t argc, i;
     gchar **argv;
 
-    if (!(PyTuple_Check(obj) || PyList_Check(obj)))
+    if (!(PyTuple_Check (obj) || PyList_Check (obj)))
         return -1;
 
-    argc = PySequence_Length(obj);
-    for (i = 0; i < argc; ++i)
-	if (!PYGLIB_PyUnicode_Check(PySequence_Fast_GET_ITEM(obj, i)))
-	    return -1;
-    argv = g_new(gchar *, argc + 1);
-    for (i = 0; i < argc; ++i)
-	argv[i] = g_strdup(PYGLIB_PyUnicode_AsString(PySequence_Fast_GET_ITEM(obj, i)));
+    argc = PySequence_Length (obj);
+    argv = g_new (gchar *, argc + 1);
+    for (i = 0; i < argc; ++i) {
+        PyObject* item = PySequence_Fast_GET_ITEM (obj, i);
+        /* same as _pygi_marshal_from_py_utf8 */
+        if (PyUnicode_Check (item)) {
+            PyObject *pystr_obj = PyUnicode_AsUTF8String (item);
+            if (!pystr_obj) {
+                goto error;
+            }
+            argv[i] = g_strdup (PYGLIB_PyBytes_AsString (pystr_obj));
+            Py_DECREF (pystr_obj);
+        }
+#if PY_VERSION_HEX < 0x03000000
+        else if (PyString_Check (item)) {
+            argv[i] = g_strdup (PyString_AsString (item));
+        }
+#endif
+        else {
+            goto error;
+        }
+    }
+
     argv[i] = NULL;
-    g_value_take_boxed(value, argv);
+    g_value_take_boxed (value, argv);
     return 0;
+
+error:
+    for (i = i - 1; i >= 0; i--) {
+        g_free (argv[i]);
+    }
+    g_free (argv);
+    return -1;
 }

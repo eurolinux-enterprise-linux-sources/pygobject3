@@ -2,7 +2,14 @@ CLEANFILES =
 check_LTLIBRARIES = libgimarshallingtests.la
 test_typelibs = GIMarshallingTests-1.0.typelib
 
-nodist_libgimarshallingtests_la_SOURCES = $(GI_DATADIR)/tests/gimarshallingtests.c $(GI_DATADIR)/tests/gimarshallingtests.h
+nodist_libgimarshallingtests_la_SOURCES = \
+	$(GI_DATADIR)/tests/gimarshallingtests.c \
+	$(GI_DATADIR)/tests/gimarshallingtests.h
+
+dist_libgimarshallingtests_la_SOURCES = \
+	$(srcdir)/gimarshallingtestsextra.c \
+	$(srcdir)/gimarshallingtestsextra.h
+
 libgimarshallingtests_la_CFLAGS = $(GLIB_CFLAGS)
 libgimarshallingtests_la_LDFLAGS = -module -avoid-version $(GLIB_LIBS) -no-undefined
 
@@ -17,7 +24,9 @@ GIMarshallingTests-1.0.gir: libgimarshallingtests.la Makefile
 	--library=libgimarshallingtests.la \
 	--libtool="$(top_builddir)/libtool" \
 	--output $@ \
-	$(nodist_libgimarshallingtests_la_SOURCES)
+	$(nodist_libgimarshallingtests_la_SOURCES) \
+	$(dist_libgimarshallingtests_la_SOURCES)
+
 GIMarshallingTests-1.0.typelib: GIMarshallingTests-1.0.gir Makefile
 	$(AM_V_GEN) g-ir-compiler $< -o $@
 
@@ -75,6 +84,7 @@ testhelper.la: $(testhelper_la_OBJECTS) $(testhelper_la_DEPENDENCIES)
 all: $(check_LTLIBRARIES:.la=.$(OS_EXT))
 
 EXTRA_DIST = \
+	helper.py \
 	compathelper.py \
 	runtests.py \
 	runtests-windows.py \
@@ -86,6 +96,7 @@ EXTRA_DIST = \
 	org.gnome.test.gschema.xml \
 	test_cairo.py \
 	test_error.py \
+	test_fields.py \
 	test_gio.py \
 	test_glib.py \
 	test_gobject.py \
@@ -114,6 +125,7 @@ EXTRA_DIST = \
 	test_generictreemodel.py \
 	test_docstring.py \
 	test_repository.py \
+	test_resulttuple.py \
 	compat_test_pygtk.py \
 	gi/__init__.py \
 	gi/overrides/__init__.py \
@@ -123,7 +135,6 @@ EXTRA_DIST = \
 clean-local:
 	rm -f $(check_LTLIBRARIES:.la=.$(OS_EXT)) file.txt~
 
-DBUS_LAUNCH=$(shell which dbus-launch)
 RUN_TESTS_ENV_VARS= \
 	PYTHONPATH=$(top_builddir):$(top_builddir)/tests:$${PYTHONPATH:+:$$PYTHONPATH} \
 	LD_LIBRARY_PATH=$(builddir)/.libs:$$LD_LIBRARY_PATH \
@@ -137,10 +148,8 @@ RUN_TESTS_ENV_VARS= \
 # pygtkcompat tests need to be run in a separate process as they
 # clobber global name space
 check-local: $(check_LTLIBRARIES:.la=.$(OS_EXT)) $(test_typelibs) gschemas.compiled
-	export `$(DBUS_LAUNCH)` && \
-	$(RUN_TESTS_ENV_VARS) $(EXEC_NAME) $(PYTHON) -Wd $(srcdir)/runtests.py; rc=$$?; \
-	[ "$$rc" -ne 0 ] || [ -n "$$TEST_NAMES" ] || { TEST_NAMES=compat_test_pygtk $(RUN_TESTS_ENV_VARS) $(EXEC_NAME) $(PYTHON) -Wd -Werror::PendingDeprecationWarning -Werror::DeprecationWarning -Werror::RuntimeWarning $(srcdir)/runtests.py; rc=$$?; }; \
-	kill $$DBUS_SESSION_BUS_PID; \
+	$(RUN_TESTS_ENV_VARS) dbus-run-session -- $(EXEC_NAME) $(PYTHON) -Wd $(srcdir)/runtests.py; rc=$$?; \
+	[ "$$rc" -ne 0 ] || [ -n "$$TEST_NAMES" ] || { TEST_NAMES=compat_test_pygtk $(RUN_TESTS_ENV_VARS) dbus-run-session -- $(EXEC_NAME) $(PYTHON) -Wd -Werror::PendingDeprecationWarning -Werror::DeprecationWarning -Werror::RuntimeWarning $(srcdir)/runtests.py; rc=$$?; }; \
 	exit $$rc
 
 check.gdb:

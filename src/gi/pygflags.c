@@ -24,11 +24,11 @@
 #endif
 
 #include <pyglib.h>
-#include "pygobject-private.h"
-#include "pygflags.h"
-
-#include "pygi.h"
 #include "pygi-type.h"
+#include "pygi-util.h"
+#include "pygtype.h"
+#include "pygflags.h"
+#include "pygboxed.h"
 
 GQuark pygflags_class_key;
 
@@ -105,18 +105,37 @@ generate_repr(GType gtype, guint value)
 static PyObject *
 pyg_flags_repr(PyGFlags *self)
 {
-    char *tmp, *retval;
-    PyObject *pyretval;
+    char *tmp, *retval, *module_str, *namespace;
+    PyObject *pyretval, *module;
 
     tmp = generate_repr(self->gtype, PYGLIB_PyLong_AsUnsignedLong(self));
 
+    module = PyObject_GetAttrString ((PyObject *)self, "__module__");
+    if (module == NULL)
+        return NULL;
+
+    if (!PYGLIB_PyUnicode_Check (module)) {
+        Py_DECREF (module);
+        return NULL;
+    }
+
+    module_str = PYGLIB_PyUnicode_AsString (module);
+    namespace = g_strrstr (module_str, ".");
+    if (namespace == NULL) {
+        namespace = module_str;
+    } else {
+        namespace += 1;
+    }
+
     if (tmp)
-        retval = g_strdup_printf("<flags %s of type %s>", tmp,
-                                 g_type_name(self->gtype));
+        retval = g_strdup_printf("<flags %s of type %s.%s>", tmp,
+                                 namespace, Py_TYPE (self)->tp_name);
     else
-        retval = g_strdup_printf("<flags %ld of type %s>", PYGLIB_PyLong_AsUnsignedLong(self),
-                                 g_type_name(self->gtype));
+        retval = g_strdup_printf("<flags %ld of type %s.%s>",
+                                 PYGLIB_PyLong_AsUnsignedLong (self),
+                                 namespace, Py_TYPE (self)->tp_name);
     g_free(tmp);
+    Py_DECREF (module);
 
     pyretval = PYGLIB_PyUnicode_FromString(retval);
     g_free(retval);

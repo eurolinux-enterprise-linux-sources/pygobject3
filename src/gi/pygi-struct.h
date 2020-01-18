@@ -21,8 +21,14 @@
 #define __PYGI_STRUCT_H__
 
 #include <Python.h>
+#include <pygobject-internal.h>
 
 G_BEGIN_DECLS
+
+typedef struct {
+    PyGPointer base;
+    gboolean free_on_dealloc;
+} PyGIStruct;
 
 extern PyTypeObject PyGIStruct_Type;
 
@@ -30,6 +36,11 @@ PyObject *
 _pygi_struct_new (PyTypeObject *type,
                   gpointer      pointer,
                   gboolean      free_on_dealloc);
+
+PyObject *
+_pygi_struct_new_from_g_type (GType g_type,
+                              gpointer      pointer,
+                              gboolean      free_on_dealloc);
 
 void _pygi_struct_register_types (PyObject *m);
 

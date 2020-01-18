@@ -21,9 +21,9 @@
 #include <Python.h>
 #include <pyglib-python-compat.h>
 
+#include "pygtype.h"
 #include "pygi-basictype.h"
 #include "pygi-argument.h"
-#include "pygi-private.h"
 
 #ifdef G_OS_WIN32
 #include <math.h>
@@ -253,18 +253,23 @@ _pygi_marshal_from_py_filename (PyObject          *py_arg,
 {
     gchar *string_;
     GError *error = NULL;
+    PyObject *tmp = NULL;
+
+    if (py_arg == Py_None) {
+        arg->v_pointer = NULL;
+        return TRUE;
+    }
 
     if (PyUnicode_Check (py_arg)) {
-        PyObject *pystr_obj = PyUnicode_AsUTF8String (py_arg);
-        if (!pystr_obj)
+        tmp = PyUnicode_AsUTF8String (py_arg);
+        if (!tmp)
             return FALSE;
 
-        string_ = g_strdup (PYGLIB_PyBytes_AsString (pystr_obj));
-        Py_DECREF (pystr_obj);
+        string_ = PYGLIB_PyBytes_AsString (tmp);
     }
 #if PY_VERSION_HEX < 0x03000000
     else if (PyString_Check (py_arg)) {
-        string_ = g_strdup (PyString_AsString (py_arg));
+        string_ = PyString_AsString (py_arg);
     }
 #endif
     else {
@@ -274,7 +279,7 @@ _pygi_marshal_from_py_filename (PyObject          *py_arg,
     }
 
     arg->v_string = g_filename_from_utf8 (string_, -1, NULL, NULL, &error);
-    g_free (string_);
+    Py_XDECREF (tmp);
 
     if (arg->v_string == NULL) {
         PyErr_SetString (PyExc_Exception, error->message);

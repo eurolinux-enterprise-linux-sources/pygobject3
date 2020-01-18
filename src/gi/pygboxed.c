@@ -22,11 +22,12 @@
 #  include <config.h>
 #endif
 
-#include <pyglib.h>
-#include "pygobject-private.h"
-#include "pygboxed.h"
+#include <glib-object.h>
 
-#include "pygi.h"
+#include <pyglib.h>
+#include "pygboxed.h"
+#include "pygtype.h"
+
 #include "pygi-type.h"
 
 GQuark pygboxed_type_key;
@@ -68,13 +69,34 @@ pyg_boxed_hash(PyGBoxed *self)
 }
 
 static PyObject *
-pyg_boxed_repr(PyGBoxed *self)
+pyg_boxed_repr(PyGBoxed *boxed)
 {
-    gchar buf[128];
+    PyObject *module, *repr, *self = (PyObject *)boxed;
+    gchar *module_str, *namespace;
 
-    g_snprintf(buf, sizeof(buf), "<%s at 0x%lx>", g_type_name(self->gtype),
-	       (long)pyg_boxed_get_ptr (self));
-    return PYGLIB_PyUnicode_FromString(buf);
+    module = PyObject_GetAttrString (self, "__module__");
+    if (module == NULL)
+        return NULL;
+
+    if (!PYGLIB_PyUnicode_Check (module)) {
+        Py_DECREF (module);
+        return NULL;
+    }
+
+    module_str = PYGLIB_PyUnicode_AsString (module);
+    namespace = g_strrstr (module_str, ".");
+    if (namespace == NULL) {
+        namespace = module_str;
+    } else {
+        namespace += 1;
+    }
+
+    repr = PYGLIB_PyUnicode_FromFormat ("<%s.%s object at %p (%s at %p)>",
+                                        namespace, Py_TYPE (self)->tp_name,
+                                        self, g_type_name (boxed->gtype),
+                                        pyg_boxed_get_ptr (boxed));
+    Py_DECREF (module);
+    return repr;
 }
 
 static int
@@ -168,7 +190,7 @@ pyg_register_boxed(PyObject *dict, const gchar *class_name,
  * wrapper will be freed when the wrapper is deallocated.  If
  * @copy_boxed is True, then @own_ref must also be True.
  *
- * Returns: the boxed wrapper.
+ * Returns: the boxed wrapper or %NULL and sets an exception.
  */
 PyObject *
 pyg_boxed_new(GType boxed_type, gpointer boxed, gboolean copy_boxed,
@@ -196,6 +218,12 @@ pyg_boxed_new(GType boxed_type, gpointer boxed, gboolean copy_boxed,
 
     if (!tp)
 	tp = (PyTypeObject *)&PyGBoxed_Type; /* fallback */
+
+    if (!PyType_IsSubtype (tp, &PyGBoxed_Type)) {
+        PyErr_Format (PyExc_RuntimeError, "%s isn't a GBoxed", tp->tp_name);
+        pyglib_gil_state_release (state);
+        return NULL;
+    }
 
     self = (PyGBoxed *)tp->tp_alloc(tp, 0);
 

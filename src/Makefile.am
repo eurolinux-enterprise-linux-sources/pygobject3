@@ -23,7 +23,8 @@ EXTRA_DIST = \
 	pygi-convert.sh \
 	m4/as-ac-expand.m4 \
 	m4/jhflags.m4 \
-	m4/python.m4
+	m4/python.m4 \
+	setup.py
 
 MAINTAINERCLEANFILES = \
 	$(srcdir)/INSTALL \
@@ -184,7 +185,7 @@ check-local:
 	@if test -z "$$SKIP_PEP8"; then \
 		echo "  CHECK  PEP8"; \
 		if type pep8 >/dev/null 2>&1; then \
-			(cd $(abs_top_srcdir) && pep8 --ignore=E501,E123,E124 --repeat --show-source $(pycheck_dirs) ); \
+			(cd $(abs_top_srcdir) && pep8 --ignore=E501,E123,E124,E402,E731 --repeat --show-source $(pycheck_dirs) ); \
 		else echo "skipped, pep8 not installed"; \
 		fi; \
 	fi

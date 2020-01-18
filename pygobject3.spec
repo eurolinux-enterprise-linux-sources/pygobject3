@@ -1,51 +1,38 @@
-# Last updated for version 3.14.0
+# Last updated for version 3.18.0
 %define glib2_version                  2.38.0
-%define gobject_introspection_version  1.39.0
-%define python2_version                2.3.5
+%define gobject_introspection_version  1.46.0
+%define python2_version                2.7
 
 %if 0%{?fedora} > 12
 %global with_python3 1
 %define python3_version                3.1
 %endif
 
-%if 1
-  # Verbose build
-  %global verbosity V=1
-%else
-  # Quiet build
-  %global verbosity %{nil}
-%endif
-
 %global with_check 0
 
-### Abstract ###
+Name:           pygobject3
+Version:        3.22.0
+Release:        1%{?dist}
+Summary:        Python bindings for GObject Introspection
 
-Name: pygobject3
-Version: 3.14.0
-Release: 3%{?dist}
-License: LGPLv2+ and MIT
-Group: Development/Languages
-Summary: Python 2 bindings for GObject Introspection
-URL: https://live.gnome.org/PyGObject
-#VCS: git:git://git.gnome.org/pygobject
-Source: http://ftp.gnome.org/pub/GNOME/sources/pygobject/3.14/pygobject-%{version}.tar.xz
-
-Patch0: 0001-Avoid-a-silent-long-to-int-truncation.patch
+License:        LGPLv2+ and MIT
+URL:            https://wiki.gnome.org/Projects/PyGObject
+Source0:        https://download.gnome.org/sources/pygobject/3.22/pygobject-%{version}.tar.xz
 
 # https://bugzilla.redhat.com/1247996
 # which reverts https://bugzilla.gnome.org/709183
-Patch1: pygobject-3.14.0-allow-static-module-import.patch
+Patch1:         pygobject-3.22.0-allow-static-module-import.patch
 
-BuildRequires: glib2-devel >= %{glib2_version}
-BuildRequires: gobject-introspection-devel >= %{gobject_introspection_version}
-BuildRequires: python2-devel >= %{python2_version}
+BuildRequires:  glib2-devel >= %{glib2_version}
+BuildRequires:  gobject-introspection-devel >= %{gobject_introspection_version}
+BuildRequires:  python2-devel >= %{python2_version}
 %if 0%{?with_python3}
-BuildRequires: python3-devel >= %{python3_version}
-BuildRequires: python3-cairo-devel
+BuildRequires:  python3-devel >= %{python3_version}
+BuildRequires:  python3-cairo-devel
 %endif # if with_python3
 
-BuildRequires: cairo-gobject-devel
-BuildRequires: pycairo-devel
+BuildRequires:  cairo-gobject-devel
+BuildRequires:  pycairo-devel
 
 # Required by the upstream selftest suite:
 %if %{with_check}
@@ -53,67 +40,86 @@ BuildRequires: pycairo-devel
 # Temporarily disabled pyflakes tests to avoid the build failing due to too new
 # pyflakes 0.7.2 in F19
 # https://bugzilla.gnome.org/show_bug.cgi?id=701009
-#BuildRequires: pyflakes
-BuildRequires: python-pep8
+#BuildRequires:  pyflakes
+BuildRequires:  python-pep8
 %endif
 ## for the Gdk and Gtk typelibs, used during the test suite:
-BuildRequires: gtk3
+BuildRequires:  gtk3
 ## for xvfb-run:
-BuildRequires: xorg-x11-server-Xvfb
-BuildRequires: dejavu-sans-fonts
-BuildRequires: dejavu-sans-mono-fonts
-BuildRequires: dejavu-serif-fonts
+BuildRequires:  xorg-x11-server-Xvfb
+BuildRequires:  dejavu-sans-fonts
+BuildRequires:  dejavu-sans-mono-fonts
+BuildRequires:  dejavu-serif-fonts
 ## for dbus-launch, used by test_gdbus:
-BuildRequires: dbus-x11
+BuildRequires:  dbus-x11
 %endif # with_check
-
-Requires: %{name}-base%{?_isa} = %{version}-%{release}
-
-# The cairo override module depends on this
-Requires: pycairo%{?_isa}
 
 %description
 The %{name} package provides a convenient wrapper for the GObject library
 for use in Python programs.
 
-%package base
-Summary: Python 2 bindings for GObject Introspection base package
-Group: Development/Languages
-Requires: gobject-introspection%{?_isa} >= %{gobject_introspection_version}
+%package     -n python-gobject
+Summary:        Python 2 bindings for GObject Introspection
+Requires:       python-gobject-base%{?_isa} = %{version}-%{release}
+# The cairo override module depends on this
+Requires:       pycairo%{?_isa}
 
-%description base
+Obsoletes:      %{name} < 3.17.90-2
+Provides:       %{name} = %{version}-%{release}
+Provides:       %{name}%{?_isa} = %{version}-%{release}
+
+%description -n python-gobject
+The python-gobject package provides a convenient wrapper for the GObject
+library and and other libraries that are compatible with GObject Introspection,
+for use in Python 2 programs.
+
+%package     -n python-gobject-base
+Summary:        Python 2 bindings for GObject Introspection base package
+Requires:       gobject-introspection%{?_isa} >= %{gobject_introspection_version}
+
+Obsoletes:      %{name}-base < 3.17.90-2
+Provides:       %{name}-base = %{version}-%{release}
+Provides:       %{name}-base%{?_isa} = %{version}-%{release}
+
+%description -n python-gobject-base
 This package provides the non-cairo specific bits of the GObject Introspection
 library.
 
-%package devel
-Summary: Development files for embedding PyGObject introspection support
-Group: Development/Languages
-Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: gobject-introspection-devel%{?_isa}
-
-%description devel
-This package contains files required to embed PyGObject
-
 %if 0%{?with_python3}
-%package -n python3-gobject
-Summary: Python 3 bindings for GObject Introspection
-Group: Development/Languages
-
+%package     -n python3-gobject
+Summary:        Python 3 bindings for GObject Introspection
+Requires:       python3-gobject-base%{?_isa} = %{version}-%{release}
 # The cairo override module depends on this
-Requires: python3-cairo%{?_isa}
-Requires: gobject-introspection%{?_isa} >= %{gobject_introspection_version}
+Requires:       python3-cairo%{?_isa}
 
 %description -n python3-gobject
 The python3-gobject package provides a convenient wrapper for the GObject 
 library and and other libraries that are compatible with GObject Introspection, 
 for use in Python 3 programs.
 
+%package     -n python3-gobject-base
+Summary:        Python 3 bindings for GObject Introspection base package
+Requires:       gobject-introspection%{?_isa} >= %{gobject_introspection_version}
+
+%description -n python3-gobject-base
+This package provides the non-cairo specific bits of the GObject Introspection
+library.
+
 %endif # with_python3
+
+%package        devel
+Summary:        Development files for embedding PyGObject introspection support
+Requires:       python-gobject%{?_isa} = %{version}-%{release}
+%if 0%{?with_python3}
+Requires:       python3-gobject%{?_isa} = %{version}-%{release}
+%endif
+Requires:       gobject-introspection-devel%{?_isa}
+
+%description    devel
+This package contains files required to embed PyGObject
 
 %prep
 %setup -q -n pygobject-%{version}
-
-%patch0 -p1 -b .avoid-long-trunc
 %patch1 -p1 -b .allow-static-module-import
 
 %if 0%{?with_python3}
@@ -128,14 +134,14 @@ find -name '*.py' | xargs sed -i '1s|^#!python|#!%{__python}|'
 PYTHON=%{__python} 
 export PYTHON
 %configure
-make %{?_smp_mflags} %{verbosity}
+make %{?_smp_mflags} V=1
 
 %if 0%{?with_python3}
 pushd %{py3dir}
 PYTHON=%{__python3}
 export PYTHON
 %configure
-make %{_smp_mflags} %{verbosity}
+make %{?_smp_mflags} V=1
 popd
 %endif # with_python3
 
@@ -144,14 +150,13 @@ popd
 pushd %{py3dir}
 PYTHON=%{__python3}
 export PYTHON
-make DESTDIR=$RPM_BUILD_ROOT install %{verbosity}
+%make_install
 popd
 
 %endif # with_python3
 
-make DESTDIR=$RPM_BUILD_ROOT install %{verbosity}
+%make_install
 find $RPM_BUILD_ROOT -name '*.la' -delete
-find $RPM_BUILD_ROOT -name '*.a' -delete
 
 # Don't include makefiles in the installed docs, in order to avoid creating
 # multilib conflicts
@@ -161,7 +166,6 @@ cp -a examples _docs
 rm _docs/examples/Makefile*
 
 %check
-
 %if %{with_check}
 # Run the selftests under a temporary xvfb X server (so that they can
 # initialize Gdk etc):
@@ -176,50 +180,51 @@ rm _docs/examples/Makefile*
 pushd %{py3dir}
 PYTHON=%{__python3}
 export PYTHON
-xvfb-run make DESTDIR=$RPM_BUILD_ROOT check %{verbosity}
+xvfb-run make DESTDIR=$RPM_BUILD_ROOT check V=1
 popd
 %endif # with_python3
 
-xvfb-run make DESTDIR=$RPM_BUILD_ROOT check %{verbosity}
+xvfb-run make DESTDIR=$RPM_BUILD_ROOT check V=1
 
 %endif # with_check
 
-%post -p /sbin/ldconfig
-
-%postun -p /sbin/ldconfig
-
-%files
-%defattr(644, root, root, 755)
+%files -n python-gobject
 %{python_sitearch}/gi/_gi_cairo.so
 
-%files base
-%defattr(644, root, root, 755)
-%doc AUTHORS NEWS README COPYING
+%files -n python-gobject-base
+%license COPYING
+%doc AUTHORS NEWS README
 %dir %{python_sitearch}/gi
 %{python_sitearch}/gi/*
 %exclude %{python_sitearch}/gi/_gi_cairo.so
 %{python_sitearch}/pygobject-*.egg-info
 %{python_sitearch}/pygtkcompat/
 
+%if 0%{?with_python3}
+%files -n python3-gobject
+%{python3_sitearch}/gi/_gi_cairo*.so
+
+%files -n python3-gobject-base
+%license COPYING
+%doc AUTHORS NEWS README
+%dir %{python3_sitearch}/gi
+%{python3_sitearch}/gi/*
+%exclude %{python3_sitearch}/gi/_gi_cairo*.so
+%{python3_sitearch}/pygobject-*.egg-info
+%{python3_sitearch}/pygtkcompat/
+%endif # with_python3
+
 %files devel
-%defattr(644, root, root, 755)
 %doc _docs/*
 %dir %{_includedir}/pygobject-3.0/
 %{_includedir}/pygobject-3.0/pygobject.h
 %{_libdir}/pkgconfig/pygobject-3.0.pc
 
-%if 0%{?with_python3}
-%files -n python3-gobject
-%defattr(644, root, root, 755)
-%doc AUTHORS NEWS README COPYING
-%dir %{python3_sitearch}/gi
-%{python3_sitearch}/gi/*
-%{python3_sitearch}/pygobject-*.egg-info
-%{python3_sitearch}/pygtkcompat/
-
-%endif # with_python3
-
 %changelog
+* Mon Sep 19 2016 Kalev Lember <klember@redhat.com> - 3.22.0-1
+- Update to 3.22.0
+- Resolves: #1387039
+
 * Tue Sep 15 2015 Matthew Barnes <mbarnes@redhat.com> - 3.14.0-3
 - Allow importing static modules to fix RHEL7 rebase regressions
 

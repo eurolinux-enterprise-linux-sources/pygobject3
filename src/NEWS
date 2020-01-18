@@ -1,3 +1,142 @@
+3.22.0  19-Sep-2016
+        - configure.ac: pre-release version bump to 3.22.0 (Christoph Reiter)
+
+3.21.92 11-Sep-2016
+        - Handle nullable filename parameters (Christoph Reiter) (#770821)
+        - Fix list/hashtable enum <-> hash conversion on 64-bit big endian (Aurelien Jarno) (#770608)
+        - Allow passing sockets to io_add_watch on win32 (Lukas K) (#766396)
+        - tests: use dbus-run-session instead of dbus-launch to run tests (Michael Biebl) (#770798)
+        - configure.ac: post-release version bump to 3.21.92 (Christoph Reiter)
+
+3.21.91 25-Aug-2016
+        - Allow installing with pip (Mathieu Bridon) (#767988)
+        - Skip a test with older glib (Christoph Reiter) (#740301)
+        - Fix a test with Python 3.1/3.2 (Arfrever Frehtes Taifersar Arahesis, Christoph Reiter) (#740324)
+        - tests: Use places kwarg for assertAlmostEqual (Arfrever Frehtes Taifersar Arahesis, Christoph Reiter) (#740337)
+        - Print exception if marshalling a signal argument fails (Christoph Reiter) (#748198)
+        - overrides: allow treemodel sequence shorthands (Marinus Schraal) (#766580)
+        - Remove pygobject-external.h (Christoph Reiter) (#767084)
+        - Remove pygobject-private.h and rename pygobject.c to pygobject-object.c (Christoph Reiter) (#767084)
+        - Merge pyglib-private.h into pyglib.h (Christoph Reiter) (#767084)
+        - Remove pygi.h and pygi-private.h (Christoph Reiter) (#767084)
+        - configure.ac: post-release version bump to 3.21.1 (Simon Feltman)
+
+3.21.0  24-Apr-2016
+        - gi: Add require_versions() function (Dustin Falgout) (#761141)
+        - test_gerror_novalue: Don't assign the error to a variable
+          (Iain Lane) (#764165)
+        - build: Do not enable code coverage based on lcov
+          (Emmanuele Bassi) (#764075)
+
+3.20.0  21-Mar-2016
+
+3.19.92 15-Mar-2016
+
+3.19.91 01-Mar-2016
+        - Fix marshaling of GError stored in GValue
+          (Simon Feltman) (Thibault Saunier) (#761592)
+        - Fix marshaling or GError from Python to C from function calls
+          (Simon Feltman) (#685197)
+        - Error handling/reporting fixes (Christoph Reiter) (#751956)
+        - Fix crash due to GVariant implemented as PyGBoxed not PyGIStruct
+          (Christoph Reiter) (#751956)
+        - Fix crash with GValueArray stored in GValue
+          (Mikhail Fludkov) (#754359)
+
+3.19.90 20-Feb-2016
+        - tests: Set the active style context state before retrieving values
+          (Simon Feltman)
+        - tests: Fix crash with empty drag source icon names
+          (Simon Feltman) (#762392)
+        - Try to import GdkX11 in Gdk overrides (Christoph Reiter) (#673396)
+        - Fix import warnings pointing to the wrong code with CPython 3.3/3.5
+          (Christoph Reiter) (#757184)
+
+3.19.2  31-Oct-2015
+        - tests: Fix failure due to new GTK+ warning regarding size_allocate()
+          (Simon Feltman)
+        - Fix build warnings regarding _POSIX_C_SOURCE redefinition
+          (Simon Feltman)
+        - Drop -std=c90 for now (Matthias Clasen)
+
+3.19.1  30-Oct-2015
+        - Use a named tuple for returning multiple values (Christoph Reiter) (#727374)
+        - enum/flags: use gir info for type names and __repr__ instead of the gtype name (Christoph Reiter) (#657915)
+        - Improve and unify __repr__ format for PyGObject, PyGBoxed and PyGIStruct (Christoph Reiter) (#657915)
+        - Don't leak internal RepositoryError on import. (Christoph Reiter) (#756033)
+        - Import dependencies when importing typelibs from gi.repository (Christoph Reiter) (#656314)
+        - Fix Gdk.rectangle_intersect/rectangle_union missing with GTK+ 3.18 (Christoph Reiter) (#756364)
+        - Don't import inspect at module level (Christoph Reiter)
+        - invoke state: add a free memory cache for PyGIInvokeArgState (Christoph Reiter) (#750658)
+        - invoke/closure: reduce g_slice_alloc usage (Christoph Reiter) (#750658)
+        - pep8: ignore new errors reported by pep8 1.6 (Christoph Reiter)
+        - Bump g-i dependency to latest stable (Garrett Regier)
+        - Avoid calling g_slist_length() during invoke (Garrett Regier)
+        - Simplify closure_convert_arguments() (Garrett Regier)
+        - Remove a level of indentation in convert_ffi_arguments() (Garrett Regier)
+        - Prevent passing the user data multiple times to callbacks (Garrett Regier) (#750347)
+        - Support throwing exceptions in closures (Garrett Regier) (#710671)
+        - Don't emit require_version warning if namespace was loaded previously using g_irepository_require (Christoph Reiter) (#754491)
+        - configure.ac: post release version bump to 3.19.1 (Garrett Regier)
+
+3.18.0  22-Sep-2015
+
+3.17.90 19-Aug-2015
+        - Allow passing unicode lists to GStrv properties on Python 2
+          (Christoph Reiter) (#744745)
+        - Avoid a silent long to int truncation (Rui Matos) (#749698)
+        - Handle gtype marshalling (Mathieu Bridon) (#749696)
+        - pygi-foreign-cairo.c: fix include for py3cairo.h
+          (Daniel Hahler) (#746742)
+        - tests: Silence various error messages and warnings
+          (Christoph Reiter) (#751156)
+        - Fix test regression when xdg-user-dirs is not installed
+          (Christoph Reiter) (#751299)
+        - Explicitly check if an override exists instead of ImportError
+          (Garrett Regier) (#749532)
+
+3.17.1  15-Jun-2015
+        - Add gi.PyGIWarning used when import version is not specified
+          (Christoph Reiter) (#727379)
+        - Remove Gdk.Rectangle alias with newer gobject-introspection and GTK+
+          (Christoph Reiter) (#749625)
+        - overrides: Provide _overrides_module attribute
+          (Christoph Reiter) (#736678)
+        - overrides: Conditionalize touch override support in Gdk
+          (Simon Feltman) (#747717)
+        - Field setters: Remove unneeded type/range checks and unused code
+          (Christoph Reiter) (#746985)
+        - pygi-argument: Remove unused imports/includes
+          (Christoph Reiter) (#746985)
+        - Improve test coverage for field setters/getters
+          (Christoph Reiter) (#746985)
+
+3.16.0  24-Mar-2015
+
+3.15.91 05-Mar-2015
+        - tests: Don't use deprecated override attributes
+          (Christoph Reiter) (#743514)
+        - Add GLib.MINFLOAT etc. and mark GObject.G_MINFLOAT etc. deprecated
+          (Christoph Reiter) (#743514)
+        - Emit PyGIDeprecationWarning when accessing deprecated override attributes
+          (Christoph Reiter) (#743514)
+        - Add namespace and container name to all warnings/error messages
+          (Christoph Reiter) (#743468)
+        - tests: Add test for GIRepository.UnionInfo.get_size()
+          (Garrett Regier) (#745362)
+        - Avoid duping filenames when marshalling from Python to C
+          (Garrett Regier) (#744719)
+
+3.15.0  20-Feb-2015
+        - Avoid copying bytearrays from Python to C when transfer nothing (Garrett Regier) (#743278)
+        - Allows passing arguments to opaque Boxed types (Garrett Regier) (#743214)
+        - Emit ImportWarning when gi.require_version() is not used (Christoph Reiter) (#727379)
+        - Refactor overrides import/modules (Christoph Reiter) (#736678)
+        - Replace statically bound GLib.Variant.new_tuple() with GI (Simon Feltman) (#735199)
+        - overrides: Add Gdk.EventTouch union discrimination (Simon Feltman) (#736380)
+        - PyGObjectFlags: Remove a trailing comma on the enum. (Murray Cumming)
+        - Remove redefinitions of function and vfunc cache typedefs (Simon Feltman) (#737874)
+
 3.14.0  22-Sep-2014
         - configure.ac: pre release version bump to 3.14.0 (Simon Feltman)
 

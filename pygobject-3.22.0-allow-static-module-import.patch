@@ -1,7 +1,6 @@
-diff -up pygobject-3.14.0/gi/__init__.py.allow-static-module-import pygobject-3.14.0/gi/__init__.py
---- pygobject-3.14.0/gi/__init__.py.allow-static-module-import	2014-09-10 18:10:32.000000000 -0400
-+++ pygobject-3.14.0/gi/__init__.py	2015-09-15 12:23:51.240053648 -0400
-@@ -27,17 +27,12 @@ __path__ = extend_path(__path__, __name_
+--- pygobject-3.22.0/gi/__init__.py.allow-static-module-import	2016-07-06 08:17:26.000000000 +0200
++++ pygobject-3.22.0/gi/__init__.py	2017-02-08 16:53:17.446776839 +0100
+@@ -27,17 +27,12 @@
  import sys
  import os
  import importlib
@@ -22,7 +21,7 @@ diff -up pygobject-3.14.0/gi/__init__.py.allow-static-module-import pygobject-3.
  
  from . import _gi
  from ._gi import _gobject
-@@ -55,20 +50,6 @@ version_info = _gobject.pygobject_versio
+@@ -57,20 +52,6 @@
  __version__ = "{0}.{1}.{2}".format(*version_info)
  
  
@@ -43,12 +42,11 @@ diff -up pygobject-3.14.0/gi/__init__.py.allow-static-module-import pygobject-3.
  def check_version(version):
      if isinstance(version, str):
          version_list = tuple(map(int, version.split(".")))
-diff -up pygobject-3.14.0/tests/test_import_machinery.py.allow-static-module-import pygobject-3.14.0/tests/test_import_machinery.py
---- pygobject-3.14.0/tests/test_import_machinery.py.allow-static-module-import	2015-09-15 12:24:21.601235349 -0400
-+++ pygobject-3.14.0/tests/test_import_machinery.py	2015-09-15 12:24:47.674390896 -0400
-@@ -58,30 +58,6 @@ class TestModule(unittest.TestCase):
-         # Restore the previous cache
-         gi.module._introspection_modules = old_modules
+--- pygobject-3.22.0/tests/test_import_machinery.py.allow-static-module-import	2016-08-25 16:36:12.000000000 +0200
++++ pygobject-3.22.0/tests/test_import_machinery.py	2017-02-08 16:53:17.473776850 +0100
+@@ -90,30 +90,6 @@
+         self.assertIn('gi.repository.Gio', sys.modules)
+         self.assertIn('gi.repository.GIMarshallingTests', sys.modules)
  
 -    def test_static_binding_protection(self):
 -        # Importing old static bindings once gi has been imported should not

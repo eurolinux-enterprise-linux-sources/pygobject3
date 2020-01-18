@@ -18,9 +18,11 @@
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <Python.h>
 #include <girepository.h>
 
 #include "pyglib.h"
+#include "pygtype.h"
 #include "pygi-info.h"
 #include "pygi-cache.h"
 #include "pygi-marshal-cleanup.h"
@@ -34,6 +36,8 @@
 #include "pygi-object.h"
 #include "pygi-struct-marshal.h"
 #include "pygi-enum-marshal.h"
+#include "pygi-resulttuple.h"
+#include "pygi-invoke.h"
 
 
 /* _arg_info_default_value
@@ -465,6 +469,9 @@ _callable_cache_generate_args_cache_real (PyGICallableCache *callable_cache,
     PyGIArgCache *return_cache;
     PyGIDirection return_direction;
 	gssize last_explicit_arg_index;
+    PyObject *tuple_names;
+    GSList *arg_cache_item;
+    PyTypeObject* resulttuple_type;
 
     /* Return arguments are always considered out */
     return_direction = _pygi_get_direction (callable_cache, GI_DIRECTION_OUT);
@@ -489,6 +496,8 @@ _callable_cache_generate_args_cache_real (PyGICallableCache *callable_cache,
     callable_cache->return_cache = return_cache;
     g_base_info_unref (return_info);
 
+    callable_cache->user_data_index = -1;
+
     for (i = 0, arg_index = callable_cache->args_offset;
          arg_index < _pygi_callable_cache_args_len (callable_cache);
          i++, arg_index++) {
@@ -498,7 +507,9 @@ _callable_cache_generate_args_cache_real (PyGICallableCache *callable_cache,
 
         arg_info = g_callable_info_get_arg (callable_info, i);
 
+        /* This only happens when dealing with callbacks */
         if (g_arg_info_get_closure (arg_info) == i) {
+            callable_cache->user_data_index = i;
 
             arg_cache = pygi_arg_cache_alloc ();
             _pygi_callable_cache_set_arg (callable_cache, arg_index, arg_cache);
@@ -637,6 +648,36 @@ _callable_cache_generate_args_cache_real (PyGICallableCache *callable_cache,
         }
     }
 
+    if (!return_cache->is_skipped && return_cache->type_tag != GI_TYPE_TAG_VOID) {
+        callable_cache->has_return = TRUE;
+    }
+
+    tuple_names = PyList_New (0);
+    if (callable_cache->has_return) {
+        PyList_Append (tuple_names, Py_None);
+    }
+
+    arg_cache_item = callable_cache->to_py_args;
+    while (arg_cache_item) {
+        const gchar *arg_name = ((PyGIArgCache *)arg_cache_item->data)->arg_name;
+        PyObject *arg_string = PYGLIB_PyUnicode_FromString (arg_name);
+        PyList_Append (tuple_names, arg_string);
+        Py_DECREF (arg_string);
+        arg_cache_item = arg_cache_item->next;
+    }
+
+    /* No need to create a tuple type if there aren't multiple values */
+    if (PyList_Size (tuple_names) > 1) {
+        resulttuple_type = pygi_resulttuple_new_type (tuple_names);
+        if (resulttuple_type == NULL) {
+            Py_DECREF (tuple_names);
+            return FALSE;
+        } else {
+            callable_cache->resulttuple_type = resulttuple_type;
+        }
+    }
+    Py_DECREF (tuple_names);
+
     return TRUE;
 }
 
@@ -647,6 +688,7 @@ _callable_cache_deinit_real (PyGICallableCache *cache)
     g_slist_free (cache->arg_name_list);
     g_hash_table_destroy (cache->arg_name_hash);
     g_ptr_array_unref (cache->args_cache);
+    Py_XDECREF (cache->resulttuple_type);
 
     if (cache->return_cache != NULL)
         pygi_arg_cache_free (cache->return_cache);
@@ -657,6 +699,7 @@ _callable_cache_init (PyGICallableCache *cache,
                       GICallableInfo *callable_info)
 {
     gint n_args;
+    GIBaseInfo *container;
 
     if (cache->deinit == NULL)
         cache->deinit = _callable_cache_deinit_real;
@@ -665,18 +708,27 @@ _callable_cache_init (PyGICallableCache *cache,
         cache->generate_args_cache = _callable_cache_generate_args_cache_real;
 
     cache->name = g_base_info_get_name ((GIBaseInfo *) callable_info);
+    cache->namespace = g_base_info_get_namespace ((GIBaseInfo *) callable_info);
+    container = g_base_info_get_container ((GIBaseInfo *) callable_info);
+    cache->container_name = NULL;
+    /* https://bugzilla.gnome.org/show_bug.cgi?id=709456 */
+    if (container != NULL && g_base_info_get_type (container) != GI_INFO_TYPE_TYPE) {
+        cache->container_name = g_base_info_get_name (container);
+    }
     cache->throws = g_callable_info_can_throw_gerror ((GIBaseInfo *) callable_info);
 
     if (g_base_info_is_deprecated (callable_info)) {
         const gchar *deprecated = g_base_info_get_attribute (callable_info, "deprecated");
         gchar *warning;
+        gchar *full_name = pygi_callable_cache_get_full_name (cache);
         if (deprecated != NULL)
-            warning = g_strdup_printf ("%s.%s is deprecated: %s",
-                                       g_base_info_get_namespace (callable_info), cache->name,
+            warning = g_strdup_printf ("%s is deprecated: %s",
+                                       full_name,
                                        deprecated);
         else
-            warning = g_strdup_printf ("%s.%s is deprecated",
-                                       g_base_info_get_namespace (callable_info), cache->name);
+            warning = g_strdup_printf ("%s is deprecated",
+                                       full_name);
+        g_free (full_name);
         PyErr_WarnEx (PyExc_DeprecationWarning, warning, 0);
         g_free (warning);
     }
@@ -694,6 +746,23 @@ _callable_cache_init (PyGICallableCache *cache,
     }
 
     return TRUE;
+}
+
+gchar *
+pygi_callable_cache_get_full_name (PyGICallableCache *cache)
+{
+    if (cache->container_name != NULL) {
+        return g_strjoin (".",
+                          cache->namespace,
+                          cache->container_name,
+                          cache->name,
+                          NULL);
+    } else {
+        return g_strjoin (".",
+                          cache->namespace,
+                          cache->name,
+                          NULL);
+    }
 }
 
 void
@@ -845,11 +914,13 @@ _constructor_cache_invoke_real (PyGIFunctionCache *function_cache,
 
     constructor_class = PyTuple_GetItem (py_args, 0);
     if (constructor_class == NULL) {
+        gchar *full_name = pygi_callable_cache_get_full_name (cache);
         PyErr_Clear ();
         PyErr_Format (PyExc_TypeError,
                       "Constructors require the class to be passed in as an argument, "
                       "No arguments passed to the %s constructor.",
-                      ((PyGICallableCache *) function_cache)->name);
+                      full_name);
+        g_free (full_name);
 
         return FALSE;
     }
@@ -1087,6 +1158,25 @@ pygi_closure_cache_new (GICallableInfo *info)
         len_arg_cache->meta_type = PYGI_META_ARG_TYPE_PARENT;
     }
 
+    /* Prevent guessing multiple user data arguments.
+     * This is required because some versions of GI
+     * do not recognize user_data/data arguments correctly.
+     */
+    if (callable_cache->user_data_index == -1) {
+        for (i = 0; i < _pygi_callable_cache_args_len (callable_cache); i++) {
+            PyGIArgCache *arg_cache;
+
+            arg_cache = g_ptr_array_index (callable_cache->args_cache, i);
+
+            if (arg_cache->direction == PYGI_DIRECTION_TO_PYTHON &&
+                arg_cache->type_tag == GI_TYPE_TAG_VOID &&
+                arg_cache->is_pointer) {
+
+                callable_cache->user_data_index = i;
+                break;
+            }
+        }
+    }
+
     return closure_cache;
 }
-

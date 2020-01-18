@@ -18,13 +18,20 @@
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <glib.h>
 #include <Python.h>
+#include <glib.h>
 #include <pyglib-python-compat.h>
 
 #include "pygi-struct-marshal.h"
-#include "pygi-private.h"
+#include "pygi-struct.h"
+#include "pygi-foreign.h"
 #include "pygi-value.h"
+#include "pygi-type.h"
+#include "pygi-boxed.h"
+#include "pygi-info.h"
+#include "pygpointer.h"
+#include "pygboxed.h"
+#include "pygtype.h"
 
 /*
  * _is_union_member - check to see if the py_arg is actually a member of the

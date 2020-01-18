@@ -23,10 +23,13 @@
 import unittest
 import collections
 
+import gi
+
+gi.require_version('GIRepository', '2.0')
+
 import gi._gi as GIRepository
 from gi.module import repository as repo
 from gi.repository import GObject
-from gi.repository import GLib
 from gi.repository import GIMarshallingTests
 from gi.repository import GIRepository as IntrospectedRepository
 
@@ -36,6 +39,8 @@ try:
     has_cairo = True
 except ImportError:
     has_cairo = False
+
+from helper import capture_glib_warnings
 
 
 def find_child_info(info, getter_name, name):
@@ -49,8 +54,35 @@ def find_child_info(info, getter_name, name):
 
 class Test(unittest.TestCase):
     def setUp(self):
+        repo.require('GLib')
         repo.require('GObject')
         repo.require('GIMarshallingTests')
+
+    def test_repo_get_dependencies(self):
+        self.assertRaises(TypeError, repo.get_dependencies)
+        self.assertEqual(repo.get_dependencies("GLib"), [])
+        self.assertEqual(repo.get_dependencies("GObject"), ["GLib-2.0"])
+
+    def test_repo_is_registered(self):
+        self.assertRaises(TypeError, repo.is_registered)
+        self.assertRaises(TypeError, repo.is_registered, None)
+        self.assertTrue(repo.is_registered("GIRepository"))
+        self.assertTrue(repo.is_registered("GIRepository", None))
+        self.assertTrue(isinstance(repo.is_registered("GIRepository"), bool))
+        self.assertTrue(repo.is_registered("GIRepository", "2.0"))
+        self.assertFalse(repo.is_registered("GIRepository", ""))
+        self.assertFalse(repo.is_registered("GIRepository", "99.0"))
+        self.assertFalse(repo.is_registered("GIRepository", "1.0"))
+
+    def test_repo_get_immediate_dependencies(self):
+        self.assertRaises(TypeError, repo.get_immediate_dependencies)
+        self.assertEqual(repo.get_immediate_dependencies("GLib"), [])
+        self.assertEqual(
+            repo.get_immediate_dependencies("GObject"), ["GLib-2.0"])
+        self.assertEqual(
+            repo.get_immediate_dependencies(namespace="GObject"), ["GLib-2.0"])
+        self.assertEqual(
+            repo.get_immediate_dependencies("GIMarshallingTests"), ["Gio-2.0"])
 
     def test_arg_info(self):
         func_info = repo.find_by_name('GIMarshallingTests', 'array_fixed_out_struct')
@@ -169,6 +201,7 @@ class Test(unittest.TestCase):
         self.assertTrue(isinstance(info, GIRepository.UnionInfo))
         self.assertTrue(isinstance(info.get_fields(), collections.Iterable))
         self.assertTrue(isinstance(info.get_methods(), collections.Iterable))
+        self.assertTrue(isinstance(info.get_size(), int))
 
     def test_type_info(self):
         func_info = repo.find_by_name('GIMarshallingTests', 'array_fixed_out_struct')
@@ -328,26 +361,20 @@ class Test(unittest.TestCase):
         # also raise a RuntimeError.
         GIMarshallingTests.NoTypeFlags  # cause flags registration
         info = repo.find_by_name('GIMarshallingTests', 'NoTypeFlags')
-        old_mask = GLib.log_set_always_fatal(GLib.LogLevelFlags.LEVEL_ERROR)
-        try:
+        with capture_glib_warnings(allow_warnings=True):
             self.assertRaises(RuntimeError,
                               GIRepository.flags_register_new_gtype_and_add,
                               info)
-        finally:
-            GLib.log_set_always_fatal(old_mask)
 
     def test_enum_double_registration_error(self):
         # a warning is printed for double registration and pygobject will
         # also raise a RuntimeError.
         GIMarshallingTests.Enum  # cause enum registration
         info = repo.find_by_name('GIMarshallingTests', 'Enum')
-        old_mask = GLib.log_set_always_fatal(GLib.LogLevelFlags.LEVEL_ERROR)
-        try:
+        with capture_glib_warnings(allow_warnings=True):
             self.assertRaises(RuntimeError,
                               GIRepository.enum_register_new_gtype_and_add,
                               info)
-        finally:
-            GLib.log_set_always_fatal(old_mask)
 
     def test_enums(self):
         self.assertTrue(hasattr(GIRepository, 'Direction'))

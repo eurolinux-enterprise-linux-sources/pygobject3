@@ -21,19 +21,62 @@
  * USA
  */
 
-#include "pyglib-private.h"
-#include "pygobject-private.h"
-#include "pyginterface.h"
-#include "pygi-private.h"
-#include "pygi.h"
+#include <glib-object.h>
+
 #include "pyglib.h"
+#include "pyginterface.h"
+#include "pygi-repository.h"
+#include "pyglib.h"
+#include "pygtype.h"
+#include "pygenum.h"
+#include "pygboxed.h"
+#include "pygflags.h"
 #include "pygi-error.h"
 #include "pygi-foreign.h"
+#include "pygi-resulttuple.h"
+#include "pygi-source.h"
+#include "pygi-ccallback.h"
+#include "pygi-closure.h"
+#include "pygi-type.h"
+#include "pygi-boxed.h"
+#include "pygi-info.h"
+#include "pygi-struct.h"
 
 #include <pyglib-python-compat.h>
 
+PyObject *PyGIWarning;
 PyObject *PyGIDeprecationWarning;
 PyObject *_PyGIDefaultArgPlaceholder;
+
+
+/* Defined by PYGLIB_MODULE_START */
+extern PyObject *pyglib__gobject_module_create (void);
+
+/* Returns a new flag/enum type or %NULL */
+static PyObject *
+flags_enum_from_gtype (GType g_type,
+                       PyObject * (add_func) (PyObject *, const char *,
+                                              const char *, GType))
+{
+    PyObject *new_type;
+    GIRepository *repository;
+    GIBaseInfo *info;
+    const gchar *type_name;
+
+    repository = g_irepository_get_default ();
+    info = g_irepository_find_by_gtype (repository, g_type);
+    if (info != NULL) {
+        type_name = g_base_info_get_name (info);
+        new_type = add_func (NULL, type_name, NULL, g_type);
+        g_base_info_unref (info);
+    } else {
+        type_name = g_type_name (g_type);
+        new_type = add_func (NULL, type_name, NULL, g_type);
+    }
+
+    return new_type;
+}
+
 
 static PyObject *
 _wrap_pyg_enum_add (PyObject *self,
@@ -55,7 +98,7 @@ _wrap_pyg_enum_add (PyObject *self,
         return NULL;
     }
 
-    return pyg_enum_add (NULL, g_type_name (g_type), NULL, g_type);
+    return flags_enum_from_gtype (g_type, pyg_enum_add);
 }
 
 static PyObject *
@@ -151,7 +194,7 @@ _wrap_pyg_enum_register_new_gtype_and_add (PyObject *self,
     }
 
     g_free (full_name);
-    return pyg_enum_add (NULL, g_type_name (g_type), NULL, g_type);
+    return pyg_enum_add (NULL, type_name, NULL, g_type);
 }
 
 static PyObject *
@@ -174,7 +217,7 @@ _wrap_pyg_flags_add (PyObject *self,
         return NULL;
     }
 
-    return pyg_flags_add (NULL, g_type_name (g_type), NULL, g_type);
+    return flags_enum_from_gtype (g_type, pyg_flags_add);
 }
 
 static PyObject *
@@ -270,7 +313,7 @@ _wrap_pyg_flags_register_new_gtype_and_add (PyObject *self,
     }
 
     g_free (full_name);
-    return pyg_flags_add (NULL, g_type_name (g_type), NULL, g_type);
+    return pyg_flags_add (NULL, type_name, NULL, g_type);
 }
 
 static void
@@ -470,44 +513,6 @@ _wrap_pyg_has_vfunc_implementation (PyObject *self, PyObject *args)
 #endif
 
 static PyObject *
-_wrap_pyg_variant_new_tuple (PyObject *self, PyObject *args)
-{
-    PyObject *py_values;
-    GVariant **values = NULL;
-    GVariant *variant = NULL;
-    PyObject *py_variant = NULL;
-    PyObject *py_type;
-    gssize i;
-
-    if (!PyArg_ParseTuple (args, "O!:variant_new_tuple",
-                           &PyTuple_Type, &py_values)) {
-        return NULL;
-    }
-
-    py_type = _pygi_type_import_by_name ("GLib", "Variant");
-
-    values = g_newa (GVariant*, PyTuple_Size (py_values));
-
-    for (i = 0; i < PyTuple_Size (py_values); i++) {
-        PyObject *value = PyTuple_GET_ITEM (py_values, i);
-
-        if (!PyObject_IsInstance (value, py_type)) {
-            PyErr_Format (PyExc_TypeError, "argument %" G_GSSIZE_FORMAT " is not a GLib.Variant", i);
-            return NULL;
-        }
-
-        values[i] = pyg_pointer_get (value, GVariant);
-    }
-
-    variant = g_variant_new_tuple (values, PyTuple_Size (py_values));
-    g_variant_ref_sink (variant);
-
-    py_variant = _pygi_struct_new ( (PyTypeObject *) py_type, variant, FALSE);
-
-    return py_variant;
-}
-
-static PyObject *
 _wrap_pyg_variant_type_from_string (PyObject *self, PyObject *args)
 {
     char *type_string;
@@ -617,7 +622,6 @@ static PyMethodDef _gi_functions[] = {
 
     { "register_interface_info", (PyCFunction) _wrap_pyg_register_interface_info, METH_VARARGS },
     { "hook_up_vfunc_implementation", (PyCFunction) _wrap_pyg_hook_up_vfunc_implementation, METH_VARARGS },
-    { "variant_new_tuple", (PyCFunction) _wrap_pyg_variant_new_tuple, METH_VARARGS },
     { "variant_type_from_string", (PyCFunction) _wrap_pyg_variant_type_from_string, METH_VARARGS },
     { "source_new", (PyCFunction) _wrap_pyg_source_new, METH_NOARGS },
     { "source_set_callback", (PyCFunction) pyg_source_set_callback, METH_VARARGS },
@@ -675,7 +679,9 @@ PYGLIB_MODULE_START(_gi, "_gi")
     _pygi_struct_register_types (module);
     _pygi_boxed_register_types (module);
     _pygi_ccallback_register_types (module);
-    _pygi_argument_init ();
+    pygi_resulttuple_register_types (module);
+
+    PyGIWarning = PyErr_NewException ("gi.PyGIWarning", PyExc_Warning, NULL);
 
     /* Use RuntimeWarning as the base class of PyGIDeprecationWarning
      * for unstable (odd minor version) and use DeprecationWarning for
@@ -694,6 +700,9 @@ PYGLIB_MODULE_START(_gi, "_gi")
      * for values not supplied by the caller but support a GI default.
      */
     _PyGIDefaultArgPlaceholder = PyObject_New(PyObject, &PyType_Type);
+
+    Py_INCREF (PyGIWarning);
+    PyModule_AddObject (module, "PyGIWarning", PyGIWarning);
 
     Py_INCREF(PyGIDeprecationWarning);
     PyModule_AddObject(module, "PyGIDeprecationWarning", PyGIDeprecationWarning);

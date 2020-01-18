@@ -24,7 +24,7 @@
 
 #include <girepository.h>
 
-#include "pygi-private.h"
+#include "pygi-info.h"
 #include "pygi-invoke-state-struct.h"
 
 G_BEGIN_DECLS
@@ -37,6 +37,10 @@ PyObject *pygi_callable_info_invoke (GIBaseInfo *info, PyObject *py_args,
                                      gpointer user_data);
 PyObject *_wrap_g_callable_info_invoke (PyGIBaseInfo *self, PyObject *py_args,
                                         PyObject *kwargs);
+
+gboolean _pygi_invoke_arg_state_init (PyGIInvokeState *state);
+
+void _pygi_invoke_arg_state_free     (PyGIInvokeState *state);
 
 G_END_DECLS
 

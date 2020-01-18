@@ -24,11 +24,20 @@ import warnings
 
 from ..overrides import override, strip_boolean_result
 from ..module import get_introspection_module
-from gi import PyGIDeprecationWarning
+from gi import PyGIDeprecationWarning, require_version
 
 Gdk = get_introspection_module('Gdk')
 
 __all__ = []
+
+
+# https://bugzilla.gnome.org/show_bug.cgi?id=673396
+try:
+    require_version("GdkX11", Gdk._version)
+    from gi.repository import GdkX11
+    GdkX11  # pyflakes
+except (ValueError, ImportError):
+    pass
 
 
 class Color(Gdk.Color):
@@ -126,10 +135,22 @@ if Gdk._version == '2.0':
     Rectangle = override(Rectangle)
     __all__.append('Rectangle')
 else:
-    from gi.repository import cairo as _cairo
-    Rectangle = _cairo.RectangleInt
+    # Newer GTK+/gobject-introspection (3.17.x) include GdkRectangle in the
+    # typelib. See https://bugzilla.gnome.org/show_bug.cgi?id=748832 and
+    # https://bugzilla.gnome.org/show_bug.cgi?id=748833
+    if not hasattr(Gdk, 'Rectangle'):
+        from gi.repository import cairo as _cairo
+        Rectangle = _cairo.RectangleInt
 
-    __all__.append('Rectangle')
+        __all__.append('Rectangle')
+    else:
+        # https://bugzilla.gnome.org/show_bug.cgi?id=756364
+        # These methods used to be functions, keep aliases for backwards compat
+        rectangle_intersect = Gdk.Rectangle.intersect
+        rectangle_union = Gdk.Rectangle.union
+
+        __all__.append('rectangle_intersect')
+        __all__.append('rectangle_union')
 
 if Gdk._version == '2.0':
     class Drawable(Gdk.Drawable):
@@ -195,6 +216,15 @@ class Event(Gdk.Event):
     if Gdk._version == '2.0':
         _UNION_MEMBERS[Gdk.EventType.NO_EXPOSE] = 'no_expose'
 
+    if hasattr(Gdk.EventType, 'TOUCH_BEGIN'):
+        _UNION_MEMBERS.update(
+            {
+                Gdk.EventType.TOUCH_BEGIN: 'touch',
+                Gdk.EventType.TOUCH_UPDATE: 'touch',
+                Gdk.EventType.TOUCH_END: 'touch',
+                Gdk.EventType.TOUCH_CANCEL: 'touch',
+            })
+
     def __getattr__(self, name):
         real_event = getattr(self, '_UNION_MEMBERS').get(self.type)
         if real_event:
@@ -244,6 +274,10 @@ event_member_classes = ['EventAny',
 
 if Gdk._version == '2.0':
     event_member_classes.append('EventNoExpose')
+
+if hasattr(Gdk, 'EventTouch'):
+    event_member_classes.append('EventTouch')
+
 
 # whitelist all methods that have a success return we want to mask
 gsuccess_mask_funcs = ['get_state',

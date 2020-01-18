@@ -1,7 +1,7 @@
 /* -*- Mode: C; c-basic-offset: 4 -*-
- * pyglib - Python bindings for GLib toolkit.
- * Copyright (C) 1998-2003  James Henstridge
- *               2004-2008  Johan Dahlin
+ * vim: tabstop=4 shiftwidth=4 expandtab
+ *
+ * Copyright (C) 2015 Christoph Reiter <reiter.christoph@gmail.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -17,24 +17,18 @@
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __PYGLIB_PRIVATE_H__
-#define __PYGLIB_PRIVATE_H__
+#ifndef __PYGI_RESULTTUPLE_H__
+#define __PYGI_RESULTTUPLE_H__
 
-#include <Python.h>
-#include <glib.h>
+#include "Python.h"
 
-#include <pyglib.h>
-#include <pyglib-python-compat.h>
+int
+pygi_resulttuple_register_types    (PyObject *d);
 
-G_BEGIN_DECLS
+PyTypeObject *
+pygi_resulttuple_new_type          (PyObject *tuple_names);
 
-gboolean _pyglib_handler_marshal(gpointer user_data);
-void _pyglib_destroy_notify(gpointer user_data);
+PyObject*
+pygi_resulttuple_new               (PyTypeObject *subclass, Py_ssize_t len);
 
-extern PyObject *pyglib__glib_module_create (void);
-
-G_END_DECLS
-
-#endif /* __PYGLIB_PRIVATE_H__ */
-
-
+#endif /* __PYGI_RESULTTUPLE_H__ */

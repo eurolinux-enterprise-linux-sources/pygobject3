@@ -18,12 +18,14 @@
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <glib.h>
 #include <Python.h>
+#include <glib.h>
 #include <pyglib-python-compat.h>
 
 #include "pygi-enum-marshal.h"
-#include "pygi-private.h"
+#include "pygi-type.h"
+#include "pygenum.h"
+#include "pygflags.h"
 
 static gboolean
 gi_argument_from_c_long (GIArgument *arg_out,

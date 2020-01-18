@@ -36,6 +36,7 @@ pygi_LTLIBRARIES = _gi.la
 
 _gi_la_SOURCES = \
 	gobjectmodule.c \
+	gobjectmodule.h \
 	pygboxed.c \
 	pygboxed.h \
 	pygenum.c \
@@ -44,9 +45,10 @@ _gi_la_SOURCES = \
 	pygflags.h \
 	pyginterface.c \
 	pyginterface.h \
-	pygobject.c \
 	pygobject.h \
-	pygobject-private.h \
+	pygobject-internal.h \
+	pygobject-object.c \
+	pygobject-object.h \
 	pygparamspec.c \
 	pygparamspec.h \
 	pygpointer.c \
@@ -62,7 +64,6 @@ _gi_la_SOURCES = \
 	pygspawn.h \
 	pyglib.c \
 	pyglib.h \
-	pyglib-private.h \
 	pyglib-python-compat.h \
 	gimodule.c \
 	pygi-repository.c \
@@ -78,6 +79,8 @@ _gi_la_SOURCES = \
 	pygi-source.h \
 	pygi-argument.c \
 	pygi-argument.h \
+	pygi-resulttuple.c \
+	pygi-resulttuple.h \
 	pygi-type.c \
 	pygi-type.h \
 	pygi-boxed.c \
@@ -86,13 +89,12 @@ _gi_la_SOURCES = \
 	pygi-closure.h \
 	pygi-ccallback.c \
 	pygi-ccallback.h \
-	pygi.h \
-	pygi-private.h \
+	pygi-util.c \
+	pygi-util.h \
 	pygi-property.c \
 	pygi-property.h \
 	pygi-signal-closure.c \
 	pygi-signal-closure.h \
-	pygobject-external.h \
 	pygi-invoke.c \
 	pygi-invoke.h \
 	pygi-invoke-state-struct.h \

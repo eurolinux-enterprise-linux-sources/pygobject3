@@ -2,7 +2,6 @@
 # vim: tabstop=4 shiftwidth=4 expandtab
 
 import unittest
-import warnings
 
 import gi.overrides
 from gi import PyGIDeprecationWarning
@@ -12,6 +11,8 @@ try:
     Gdk  # pyflakes
 except ImportError:
     Gdk = None
+
+from helper import capture_glib_deprecation_warnings
 
 
 @unittest.skipUnless(Gdk, 'Gdk not available')
@@ -29,7 +30,8 @@ class TestGdk(unittest.TestCase):
         self.assertEqual(color.red, 100)
         self.assertEqual(color.green, 200)
         self.assertEqual(color.blue, 300)
-        self.assertEqual(color, Gdk.Color(100, 200, 300))
+        with capture_glib_deprecation_warnings():
+            self.assertEqual(color, Gdk.Color(100, 200, 300))
         self.assertNotEqual(color, Gdk.Color(1, 2, 3))
 
     def test_color_floats(self):
@@ -69,6 +71,18 @@ class TestGdk(unittest.TestCase):
         event = Gdk.Event()
         event.type = Gdk.EventType.SCROLL
         self.assertRaises(AttributeError, lambda: getattr(event, 'foo_bar'))
+
+    def test_event_touch(self):
+        event = Gdk.Event.new(Gdk.EventType.TOUCH_BEGIN)
+        self.assertEqual(event.type, Gdk.EventType.TOUCH_BEGIN)
+
+        # emulating_pointer is unique to touch events
+        self.assertFalse(event.emulating_pointer)
+        self.assertFalse(event.touch.emulating_pointer)
+
+        event.emulating_pointer = True
+        self.assertTrue(event.emulating_pointer)
+        self.assertTrue(event.touch.emulating_pointer)
 
     def test_event_setattr(self):
         event = Gdk.Event.new(Gdk.EventType.DRAG_MOTION)
@@ -110,9 +124,11 @@ class TestGdk(unittest.TestCase):
 
     def test_cursor(self):
         self.assertEqual(Gdk.Cursor, gi.overrides.Gdk.Cursor)
-        c = Gdk.Cursor(Gdk.CursorType.WATCH)
+        with capture_glib_deprecation_warnings():
+            c = Gdk.Cursor(Gdk.CursorType.WATCH)
         self.assertNotEqual(c, None)
-        c = Gdk.Cursor(cursor_type=Gdk.CursorType.WATCH)
+        with capture_glib_deprecation_warnings():
+            c = Gdk.Cursor(cursor_type=Gdk.CursorType.WATCH)
         self.assertNotEqual(c, None)
 
         display_manager = Gdk.DisplayManager.get()
@@ -124,8 +140,7 @@ class TestGdk(unittest.TestCase):
                                            5,
                                            10)
 
-        with warnings.catch_warnings(record=True) as warn:
-            warnings.simplefilter('always')
+        with capture_glib_deprecation_warnings() as warn:
             c = Gdk.Cursor(display,
                            test_pixbuf,
                            y=0, x=0)
@@ -142,19 +157,20 @@ class TestGdk(unittest.TestCase):
         self.assertEqual(Gdk.ModifierType.META_MASK | 0, 0x10000000)
         self.assertEqual(hex(Gdk.ModifierType.META_MASK), '0x10000000')
         self.assertEqual(str(Gdk.ModifierType.META_MASK),
-                         '<flags GDK_META_MASK of type GdkModifierType>')
+                         '<flags GDK_META_MASK of type Gdk.ModifierType>')
 
         self.assertEqual(Gdk.ModifierType.RELEASE_MASK | 0, 0x40000000)
         self.assertEqual(hex(Gdk.ModifierType.RELEASE_MASK), '0x40000000')
         self.assertEqual(str(Gdk.ModifierType.RELEASE_MASK),
-                         '<flags GDK_RELEASE_MASK of type GdkModifierType>')
+                         '<flags GDK_RELEASE_MASK of type Gdk.ModifierType>')
 
         self.assertEqual(Gdk.ModifierType.RELEASE_MASK | Gdk.ModifierType.META_MASK, 0x50000000)
         self.assertEqual(str(Gdk.ModifierType.RELEASE_MASK | Gdk.ModifierType.META_MASK),
-                         '<flags GDK_META_MASK | GDK_RELEASE_MASK of type GdkModifierType>')
+                         '<flags GDK_META_MASK | GDK_RELEASE_MASK of type Gdk.ModifierType>')
 
     def test_color_parse(self):
-        c = Gdk.color_parse('#00FF80')
+        with capture_glib_deprecation_warnings():
+            c = Gdk.color_parse('#00FF80')
         self.assertEqual(c.red, 0)
         self.assertEqual(c.green, 65535)
         self.assertEqual(c.blue, 32896)
@@ -168,3 +184,12 @@ class TestGdk(unittest.TestCase):
 
         rgba = Gdk.RGBA(red=1.0, green=0.8, blue=0.6, alpha=0.4)
         self.assertEqual(eval(repr(rgba)), rgba)
+
+    def test_rectangle_functions(self):
+        # https://bugzilla.gnome.org/show_bug.cgi?id=756364
+        a = Gdk.Rectangle()
+        b = Gdk.Rectangle()
+        self.assertTrue(isinstance(Gdk.rectangle_union(a, b), Gdk.Rectangle))
+        intersect, rect = Gdk.rectangle_intersect(a, b)
+        self.assertTrue(isinstance(rect, Gdk.Rectangle))
+        self.assertTrue(isinstance(intersect, bool))

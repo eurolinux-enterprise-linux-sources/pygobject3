@@ -18,14 +18,15 @@
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <glib.h>
 #include <Python.h>
+#include <glib.h>
 #include <pyglib-python-compat.h>
 
 #include "pygi-array.h"
-#include "pygi-private.h"
+#include "pygi-info.h"
 #include "pygi-marshal-cleanup.h"
 #include "pygi-basictype.h"
+#include "pygi-util.h"
 
 /* Needed for _pygi_marshal_cleanup_from_py_interface_struct_gvalue hack */
 #include "pygi-struct-marshal.h"
@@ -191,6 +192,7 @@ _pygi_marshal_from_py_array (PyGIInvokeState   *state,
     GArray *array_ = NULL;
     PyGISequenceCache *sequence_cache = (PyGISequenceCache *)arg_cache;
     PyGIArgGArray *array_cache = (PyGIArgGArray *)arg_cache;
+    GITransfer cleanup_transfer = arg_cache->transfer;
 
 
     if (py_arg == Py_None) {
@@ -234,7 +236,21 @@ _pygi_marshal_from_py_array (PyGIInvokeState   *state,
 
     if (sequence_cache->item_cache->type_tag == GI_TYPE_TAG_UINT8 &&
         PYGLIB_PyBytes_Check (py_arg)) {
-        memcpy(array_->data, PYGLIB_PyBytes_AsString (py_arg), length);
+        gchar *data = PYGLIB_PyBytes_AsString (py_arg);
+
+        /* Avoid making a copy if the data
+         * is not transferred to the C function
+         * and cannot not be modified by it.
+         */
+        if (array_cache->array_type == GI_ARRAY_TYPE_C &&
+            arg_cache->transfer == GI_TRANSFER_NOTHING &&
+            !array_cache->is_zero_terminated) {
+            g_free (array_->data);
+            array_->data = data;
+            cleanup_transfer = GI_TRANSFER_EVERYTHING;
+        } else {
+            memcpy (array_->data, data, length);
+        }
         array_->len = length;
         if (array_cache->is_zero_terminated) {
             /* If array_ has been created with zero_termination, space for the
@@ -371,7 +387,7 @@ array_success:
         PyGIArgCache *child_cache =
             _pygi_callable_cache_get_arg (callable_cache, array_cache->len_arg_index);
 
-        if (!gi_argument_from_py_ssize_t (&state->arg_values[child_cache->c_arg_index],
+        if (!gi_argument_from_py_ssize_t (&state->args[child_cache->c_arg_index].arg_value,
                                           length,
                                           child_cache->type_tag)) {
             goto err;
@@ -385,7 +401,7 @@ array_success:
          */
         arg->v_pointer = array_->data;
 
-        if (arg_cache->transfer == GI_TRANSFER_EVERYTHING) {
+        if (cleanup_transfer == GI_TRANSFER_EVERYTHING) {
             g_array_free (array_, FALSE);
             *cleanup_data = NULL;
         } else {
@@ -394,10 +410,10 @@ array_success:
     } else {
         arg->v_pointer = array_;
 
-        if (arg_cache->transfer == GI_TRANSFER_NOTHING) {
+        if (cleanup_transfer == GI_TRANSFER_NOTHING) {
             /* Free everything in cleanup. */
             *cleanup_data = array_;
-        } else if (arg_cache->transfer == GI_TRANSFER_CONTAINER) {
+        } else if (cleanup_transfer == GI_TRANSFER_CONTAINER) {
             /* Make a shallow copy so we can free the elements later in cleanup
              * because it is possible invoke will free the list before our cleanup. */
             *cleanup_data = is_ptr_array ?
@@ -515,7 +531,7 @@ _pygi_marshal_to_py_array (PyGIInvokeState   *state,
                 len = g_strv_length ((gchar **)arg->v_pointer);
             }
         } else {
-            GIArgument *len_arg = &state->arg_values[array_cache->len_arg_index];
+            GIArgument *len_arg = &state->args[array_cache->len_arg_index].arg_value;
             PyGIArgCache *arg_cache = _pygi_callable_cache_get_arg (callable_cache,
                                                                     array_cache->len_arg_index);
 
@@ -671,7 +687,7 @@ _wrap_c_array (PyGIInvokeState   *state,
     } else if (array_cache->is_zero_terminated) {
         len = g_strv_length ((gchar **)data);
     } else if (array_cache->len_arg_index >= 0) {
-        GIArgument *len_arg = &state->arg_values[array_cache->len_arg_index];
+        GIArgument *len_arg = &state->args[array_cache->len_arg_index].arg_value;
         len = len_arg->v_long;
     }
 

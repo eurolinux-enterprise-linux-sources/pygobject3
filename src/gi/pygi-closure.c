@@ -17,10 +17,14 @@
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "pygi-private.h"
 #include "pygi-closure.h"
+#include "pygi-error.h"
 #include "pygi-marshal-cleanup.h"
+#include "pygi-invoke.h"
+#include "pygi-ccallback.h"
+#include "pygi-info.h"
 
+extern PyObject *_PyGIDefaultArgPlaceholder;
 
 typedef struct _PyGICallbackCache
 {
@@ -42,7 +46,7 @@ _pygi_closure_assign_pyobj_to_retval (gpointer retval,
                                       GIArgument *arg,
                                       PyGIArgCache *arg_cache)
 {
-    if (PyErr_Occurred () || retval == NULL)
+    if (retval == NULL)
         return;
 
     switch (arg_cache->type_tag) {
@@ -109,14 +113,6 @@ _pygi_closure_assign_pyobj_to_retval (gpointer retval,
             *(ffi_arg *) retval = (ffi_arg) arg->v_pointer;
             break;
       }
-}
-
-static void
-_pygi_closure_clear_retval (PyGICallableCache *cache, gpointer retval)
-{
-    if (cache->return_cache->type_tag != GI_TYPE_TAG_VOID) {
-        *((ffi_arg *) retval) = 0;
-    }
 }
 
 static void
@@ -203,96 +199,101 @@ _pygi_closure_assign_pyobj_to_out_argument (gpointer out_arg,
       }
 }
 
-static GIArgument *
-_pygi_closure_convert_ffi_arguments (PyGICallableCache *cache, void **args)
+static void
+_pygi_closure_convert_ffi_arguments (PyGIInvokeArgState *state,
+                                     PyGICallableCache *cache,
+                                     void **args)
 {
-    gint num_args, i;
-    GIArgument *g_args;
+    gint i;
 
-    num_args = _pygi_callable_cache_args_len (cache);
-    g_args = g_new0 (GIArgument, num_args);
-
-    for (i = 0; i < num_args; i++) {
+    for (i = 0; i < _pygi_callable_cache_args_len (cache); i++) {
         PyGIArgCache *arg_cache = g_ptr_array_index (cache->args_cache, i);
 
         if (arg_cache->direction & PYGI_DIRECTION_FROM_PYTHON) {
-            g_args[i].v_pointer = * (gpointer *) args[i];
-        } else {
-            switch (arg_cache->type_tag) {
-                case GI_TYPE_TAG_BOOLEAN:
-                    g_args[i].v_boolean = * (gboolean *) args[i];
-                    break;
-                case GI_TYPE_TAG_INT8:
-                    g_args[i].v_int8 = * (gint8 *) args[i];
-                    break;
-                case GI_TYPE_TAG_UINT8:
-                    g_args[i].v_uint8 = * (guint8 *) args[i];
-                    break;
-                case GI_TYPE_TAG_INT16:
-                    g_args[i].v_int16 = * (gint16 *) args[i];
-                    break;
-                case GI_TYPE_TAG_UINT16:
-                    g_args[i].v_uint16 = * (guint16 *) args[i];
-                    break;
-                case GI_TYPE_TAG_INT32:
-                    g_args[i].v_int32 = * (gint32 *) args[i];
-                    break;
-                case GI_TYPE_TAG_UINT32:
-                    g_args[i].v_uint32 = * (guint32 *) args[i];
-                    break;
-                case GI_TYPE_TAG_INT64:
-                    g_args[i].v_int64 = * (glong *) args[i];
-                    break;
-                case GI_TYPE_TAG_UINT64:
-                    g_args[i].v_uint64 = * (glong *) args[i];
-                    break;
-                case GI_TYPE_TAG_FLOAT:
-                    g_args[i].v_float = * (gfloat *) args[i];
-                    break;
-                case GI_TYPE_TAG_DOUBLE:
-                    g_args[i].v_double = * (gdouble *) args[i];
-                    break;
-                case GI_TYPE_TAG_UTF8:
-                    g_args[i].v_string = * (gchar **) args[i];
-                    break;
-                case GI_TYPE_TAG_INTERFACE:
-                {
-                    GIBaseInfo *interface;
-                    GIInfoType interface_type;
+            state[i].arg_value.v_pointer = * (gpointer *) args[i];
 
-                    interface = ((PyGIInterfaceCache *) arg_cache)->interface_info;
-                    interface_type = g_base_info_get_type (interface);
+            if (state[i].arg_value.v_pointer == NULL)
+                continue;
 
-                    if (interface_type == GI_INFO_TYPE_OBJECT ||
-                            interface_type == GI_INFO_TYPE_INTERFACE) {
-                        g_args[i].v_pointer = * (gpointer *) args[i];
-                        break;
-                    } else if (interface_type == GI_INFO_TYPE_ENUM ||
-                               interface_type == GI_INFO_TYPE_FLAGS) {
-                        g_args[i].v_uint = * (guint *) args[i];
-                        break;
-                    } else if (interface_type == GI_INFO_TYPE_STRUCT ||
-                               interface_type == GI_INFO_TYPE_CALLBACK) {
-                        g_args[i].v_pointer = * (gpointer *) args[i];
-                        break;
-                    }
+            state[i].arg_pointer.v_pointer = state[i].arg_value.v_pointer;
+            state[i].arg_value = *(GIArgument *) state[i].arg_value.v_pointer;
+            continue;
+        }
+
+        switch (arg_cache->type_tag) {
+            case GI_TYPE_TAG_BOOLEAN:
+                state[i].arg_value.v_boolean = * (gboolean *) args[i];
+                break;
+            case GI_TYPE_TAG_INT8:
+                state[i].arg_value.v_int8 = * (gint8 *) args[i];
+                break;
+            case GI_TYPE_TAG_UINT8:
+                state[i].arg_value.v_uint8 = * (guint8 *) args[i];
+                break;
+            case GI_TYPE_TAG_INT16:
+                state[i].arg_value.v_int16 = * (gint16 *) args[i];
+                break;
+            case GI_TYPE_TAG_UINT16:
+                state[i].arg_value.v_uint16 = * (guint16 *) args[i];
+                break;
+            case GI_TYPE_TAG_INT32:
+                state[i].arg_value.v_int32 = * (gint32 *) args[i];
+                break;
+            case GI_TYPE_TAG_UINT32:
+                state[i].arg_value.v_uint32 = * (guint32 *) args[i];
+                break;
+            case GI_TYPE_TAG_INT64:
+                state[i].arg_value.v_int64 = * (glong *) args[i];
+                break;
+            case GI_TYPE_TAG_UINT64:
+                state[i].arg_value.v_uint64 = * (glong *) args[i];
+                break;
+            case GI_TYPE_TAG_FLOAT:
+                state[i].arg_value.v_float = * (gfloat *) args[i];
+                break;
+            case GI_TYPE_TAG_DOUBLE:
+                state[i].arg_value.v_double = * (gdouble *) args[i];
+                break;
+            case GI_TYPE_TAG_UTF8:
+                state[i].arg_value.v_string = * (gchar **) args[i];
+                break;
+            case GI_TYPE_TAG_INTERFACE:
+            {
+                GIBaseInfo *interface;
+                GIInfoType interface_type;
+
+                interface = ((PyGIInterfaceCache *) arg_cache)->interface_info;
+                interface_type = g_base_info_get_type (interface);
+
+                if (interface_type == GI_INFO_TYPE_ENUM) {
+                    state[i].arg_value.v_int = * (gint *) args[i];
+                } else if (interface_type == GI_INFO_TYPE_FLAGS) {
+                    state[i].arg_value.v_uint = * (guint *) args[i];
+                } else {
+                    state[i].arg_value.v_pointer = * (gpointer *) args[i];
                 }
-                case GI_TYPE_TAG_ERROR:
-                case GI_TYPE_TAG_GHASH:
-                case GI_TYPE_TAG_GLIST:
-                case GI_TYPE_TAG_GSLIST:
-                case GI_TYPE_TAG_ARRAY:
-                case GI_TYPE_TAG_VOID:
-                    g_args[i].v_pointer = * (gpointer *) args[i];
-                    break;
-                default:
-                    g_warning ("Unhandled type tag %s",
-                               g_type_tag_to_string (arg_cache->type_tag));
-                    g_args[i].v_pointer = 0;
+                break;
             }
+            case GI_TYPE_TAG_ERROR:
+            case GI_TYPE_TAG_GHASH:
+            case GI_TYPE_TAG_GLIST:
+            case GI_TYPE_TAG_GSLIST:
+            case GI_TYPE_TAG_ARRAY:
+            case GI_TYPE_TAG_VOID:
+                state[i].arg_value.v_pointer = * (gpointer *) args[i];
+                break;
+            default:
+                g_warning ("Unhandled type tag %s",
+                           g_type_tag_to_string (arg_cache->type_tag));
+                state[i].arg_value.v_pointer = 0;
         }
     }
-    return g_args;
+
+    if (cache->throws) {
+        gssize error_index = _pygi_callable_cache_args_len (cache);
+
+        state[error_index].arg_value.v_pointer = * (gpointer *) args[error_index];
+    }
 }
 
 static gboolean
@@ -303,57 +304,36 @@ _invoke_state_init_from_cache (PyGIInvokeState *state,
     PyGICallableCache *cache = (PyGICallableCache *) closure_cache;
 
     state->n_args = _pygi_callable_cache_args_len (cache);
-
-    state->py_in_args = PyTuple_New (state->n_args);
-    if (state->py_in_args == NULL) {
-        PyErr_NoMemory ();
-        return FALSE;
-    }
     state->n_py_in_args = state->n_args;
 
+    /* Increment after setting the number of Python input args */
     if (cache->throws) {
         state->n_args++;
     }
 
+    state->py_in_args = PyTuple_New (state->n_py_in_args);
+    if (state->py_in_args == NULL) {
+        PyErr_NoMemory ();
+        return FALSE;
+    }
+
     state->args = NULL;
-
-    state->args_cleanup_data = g_slice_alloc0 (state->n_args * sizeof (gpointer));
-    if (state->args_cleanup_data == NULL && state->n_args != 0) {
-        PyErr_NoMemory();
-        return FALSE;
-    }
-
-    state->arg_values = _pygi_closure_convert_ffi_arguments (cache, args);
-    if (state->arg_values == NULL && state->n_args != 0) {
-        PyErr_NoMemory ();
-        return FALSE;
-    }
-
-    state->arg_pointers = g_slice_alloc0 (state->n_args * sizeof(GIArgument));
-    if (state->arg_pointers == NULL && state->n_args != 0) {
-        PyErr_NoMemory ();
-        return FALSE;
-    }
-
     state->error = NULL;
 
-    if (cache->throws) {
-        gssize error_index = state->n_args - 1;
-
-        state->arg_pointers[error_index].v_pointer = &state->error;
-        state->arg_values[error_index].v_pointer = state->error;
+    if (!_pygi_invoke_arg_state_init (state)) {
+        return FALSE;
     }
 
+    state->ffi_args = NULL;
+
+    _pygi_closure_convert_ffi_arguments (state->args, cache, args);
     return TRUE;
 }
 
 static void
 _invoke_state_clear (PyGIInvokeState *state)
 {
-    g_slice_free1 (state->n_args * sizeof(gpointer), state->args_cleanup_data);
-    g_free (state->arg_values);
-    g_slice_free1 (state->n_args * sizeof(GIArgument), state->arg_pointers);
-
+    _pygi_invoke_arg_state_free (state);
     Py_XDECREF (state->py_in_args);
 }
 
@@ -365,32 +345,15 @@ _pygi_closure_convert_arguments (PyGIInvokeState *state,
     gssize n_in_args = 0;
     gssize i;
 
-    /* Must set all the arg_pointers and update the arg_values before
-     * marshaling otherwise out args wouldn't have the correct values.
-     */
-    for (i = 0; i < _pygi_callable_cache_args_len (cache); i++) {
-        PyGIArgCache *arg_cache = g_ptr_array_index (cache->args_cache, i);
-
-        if (arg_cache->direction & PYGI_DIRECTION_FROM_PYTHON &&
-                state->arg_values[i].v_pointer) {
-            state->arg_pointers[i].v_pointer = state->arg_values[i].v_pointer;
-            state->arg_values[i] = *(GIArgument *) state->arg_values[i].v_pointer;
-        }
-    }
-
     for (i = 0; i < _pygi_callable_cache_args_len (cache); i++) {
         PyGIArgCache *arg_cache;
-        PyGIDirection direction;
 
         arg_cache = g_ptr_array_index (cache->args_cache, i);
-        direction = arg_cache->direction;
 
-        if (direction & PYGI_DIRECTION_TO_PYTHON) {
+        if (arg_cache->direction & PYGI_DIRECTION_TO_PYTHON) {
             PyObject *value;
 
-            if (direction == PYGI_DIRECTION_TO_PYTHON &&
-                    arg_cache->type_tag == GI_TYPE_TAG_VOID &&
-                    arg_cache->is_pointer) {
+            if (cache->user_data_index == i) {
                 if (state->user_data == NULL) {
                     /* user_data can be NULL for connect functions which don't accept
                      * user_data or as the default for user_data in the middle of function
@@ -428,7 +391,7 @@ _pygi_closure_convert_arguments (PyGIInvokeState *state,
                 value = arg_cache->to_py_marshaller (state,
                                                      cache,
                                                      arg_cache,
-                                                     &state->arg_values[i]);
+                                                     &state->args[i].arg_value);
 
                 if (value == NULL) {
                     pygi_marshal_cleanup_args_to_py_parameter_fail (state,
@@ -471,7 +434,7 @@ _pygi_closure_set_out_arguments (PyGIInvokeState *state,
                                                            cache->return_cache,
                                                            item,
                                                            &state->return_arg,
-                                                           &state->args_cleanup_data[0]);
+                                                           &state->args[0].arg_cleanup_data);
 
         if (!success) {
             pygi_marshal_cleanup_args_return_fail (state,
@@ -491,8 +454,7 @@ _pygi_closure_set_out_arguments (PyGIInvokeState *state,
             PyObject *item = py_retval;
 
             if (arg_cache->type_tag == GI_TYPE_TAG_ERROR) {
-                /* TODO: check if an exception has been set and convert it to a GError */
-                * (GError **) state->arg_pointers[i].v_pointer = NULL;
+                * (GError **) state->args[i].arg_pointer.v_pointer = NULL;
                 continue;
             }
 
@@ -509,8 +471,8 @@ _pygi_closure_set_out_arguments (PyGIInvokeState *state,
                                                      cache,
                                                      arg_cache,
                                                      item,
-                                                     &state->arg_values[i],
-                                                     &state->args_cleanup_data[i_py_retval]);
+                                                     &state->args[i].arg_value,
+                                                     &state->args[i_py_retval].arg_cleanup_data);
 
             if (!success) {
                 pygi_marshal_cleanup_args_to_py_parameter_fail (state,
@@ -519,14 +481,46 @@ _pygi_closure_set_out_arguments (PyGIInvokeState *state,
                 return FALSE;
             }
 
-            _pygi_closure_assign_pyobj_to_out_argument (state->arg_pointers[i].v_pointer,
-                                                        &state->arg_values[i], arg_cache);
+            _pygi_closure_assign_pyobj_to_out_argument (state->args[i].arg_pointer.v_pointer,
+                                                        &state->args[i].arg_value, arg_cache);
 
             i_py_retval++;
         }
     }
 
     return TRUE;
+}
+
+static void
+_pygi_closure_clear_retvals (PyGIInvokeState *state,
+                             PyGICallableCache *cache,
+                             gpointer resp)
+{
+    gsize i;
+    GIArgument arg = { 0, };
+
+    if (cache->return_cache->type_tag != GI_TYPE_TAG_VOID) {
+        _pygi_closure_assign_pyobj_to_retval (resp, &arg,
+                                              cache->return_cache);
+    }
+
+    for (i = 0; i < _pygi_callable_cache_args_len (cache); i++) {
+        PyGIArgCache *arg_cache = g_ptr_array_index (cache->args_cache, i);
+
+        if (arg_cache->direction & PYGI_DIRECTION_FROM_PYTHON) {
+            _pygi_closure_assign_pyobj_to_out_argument (state->args[i].arg_pointer.v_pointer,
+                                                        &arg, arg_cache);
+        }
+    }
+
+    if (cache->throws) {
+        gssize error_index = state->n_args - 1;
+        GError **error = (GError **) state->args[error_index].arg_value.v_pointer;
+
+        if (error != NULL) {
+            pygi_gerror_exception_check (error);
+        }
+    }
 }
 
 static void
@@ -575,16 +569,14 @@ _pygi_closure_handle (ffi_cif *cif,
     _invoke_state_init_from_cache (&state, closure->cache, args);
 
     if (!_pygi_closure_convert_arguments (&state, closure->cache)) {
-        if (PyErr_Occurred ())
-            PyErr_Print ();
+        _pygi_closure_clear_retvals (&state, closure->cache, result);
         goto end;
     }
 
     retval = PyObject_CallObject ( (PyObject *) closure->function, state.py_in_args);
 
     if (retval == NULL) {
-        _pygi_closure_clear_retval (closure->cache, result);
-        PyErr_Print ();
+        _pygi_closure_clear_retvals (&state, closure->cache, result);
         goto end;
     }
 
@@ -593,15 +585,15 @@ _pygi_closure_handle (ffi_cif *cif,
 
     if (!success) {
         pygi_marshal_cleanup_args_from_py_marshal_success (&state, closure->cache);
-        _pygi_closure_clear_retval (closure->cache, result);
-
-        if (PyErr_Occurred ())
-            PyErr_Print ();
+        _pygi_closure_clear_retvals (&state, closure->cache, result);
     }
 
     Py_DECREF (retval);
 
 end:
+
+    if (PyErr_Occurred ())
+        PyErr_Print ();
 
     /* Now that the closure has finished we can make a decision about how
        to free it.  Scope call gets free'd at the end of wrap_g_function_info_invoke.
@@ -759,7 +751,7 @@ _pygi_marshal_from_py_interface_callback (PyGIInvokeState   *state,
      * The return trip to python will marshal this back and pull the python user data out.
      */
     if (user_data_cache != NULL) {
-        state->arg_values[user_data_cache->c_arg_index].v_pointer = closure;
+        state->args[user_data_cache->c_arg_index].arg_value.v_pointer = closure;
     }
 
     /* Setup a GDestroyNotify callback if this method supports it along with
@@ -775,19 +767,21 @@ _pygi_marshal_from_py_interface_callback (PyGIInvokeState   *state,
 
     if (destroy_cache) {
         if (user_data_cache != NULL) {
-            state->arg_values[destroy_cache->c_arg_index].v_pointer = _pygi_invoke_closure_free;
+            state->args[destroy_cache->c_arg_index].arg_value.v_pointer = _pygi_invoke_closure_free;
         } else {
+            char *full_name = pygi_callable_cache_get_full_name (callable_cache);
             gchar *msg = g_strdup_printf("Callables passed to %s will leak references because "
                                          "the method does not support a user_data argument. "
                                          "See: https://bugzilla.gnome.org/show_bug.cgi?id=685598",
-                                         callable_cache->name);
+                                         full_name);
+            g_free (full_name);
             if (PyErr_WarnEx(PyExc_RuntimeWarning, msg, 2)) {
                 g_free(msg);
                 _pygi_invoke_closure_free(closure);
                 return FALSE;
             }
             g_free(msg);
-            state->arg_values[destroy_cache->c_arg_index].v_pointer = _pygi_destroy_notify_dummy;
+            state->args[destroy_cache->c_arg_index].arg_value.v_pointer = _pygi_destroy_notify_dummy;
         }
     }
 
@@ -813,10 +807,10 @@ _pygi_marshal_to_py_interface_callback (PyGIInvokeState   *state,
     destroy_notify_index = callback_cache->destroy_notify_index;
 
     if (user_data_index != -1)
-        user_data = state->arg_values[user_data_index].v_pointer;
+        user_data = state->args[user_data_index].arg_value.v_pointer;
 
     if (destroy_notify_index != -1)
-        destroy_notify = state->arg_values[destroy_notify_index].v_pointer;
+        destroy_notify = state->args[destroy_notify_index].arg_value.v_pointer;
 
     return _pygi_ccallback_new (arg->v_pointer,
                                 user_data,

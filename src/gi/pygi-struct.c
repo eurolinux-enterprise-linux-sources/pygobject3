@@ -19,8 +19,12 @@
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "pygi-private.h"
-#include "pygobject-private.h"
+#include "pygi-struct.h"
+#include "pygi-foreign.h"
+#include "pygi-info.h"
+#include "pygi-type.h"
+#include "pygtype.h"
+#include "pygpointer.h"
 
 #include <girepository.h>
 #include <pyglib-python-compat.h>
@@ -132,6 +136,38 @@ _struct_init (PyObject *self,
 
 PYGLIB_DEFINE_TYPE("gi.Struct", PyGIStruct_Type, PyGIStruct);
 
+
+PyObject *
+_pygi_struct_new_from_g_type (GType g_type,
+                              gpointer      pointer,
+                              gboolean      free_on_dealloc)
+{
+    PyGIStruct *self;
+    PyTypeObject *type;
+
+    type = (PyTypeObject *)pygi_type_import_by_g_type (g_type);
+
+    if (!type)
+        type = (PyTypeObject *)&PyGIStruct_Type; /* fallback */
+
+    if (!PyType_IsSubtype (type, &PyGIStruct_Type)) {
+        PyErr_SetString (PyExc_TypeError, "must be a subtype of gi.Struct");
+        return NULL;
+    }
+
+    self = (PyGIStruct *) type->tp_alloc (type, 0);
+    if (self == NULL) {
+        return NULL;
+    }
+
+    pyg_pointer_set_ptr (self, pointer);
+    ( (PyGPointer *) self)->gtype = g_type;
+    self->free_on_dealloc = free_on_dealloc;
+
+    return (PyObject *) self;
+}
+
+
 PyObject *
 _pygi_struct_new (PyTypeObject *type,
                   gpointer      pointer,
@@ -159,6 +195,28 @@ _pygi_struct_new (PyTypeObject *type,
     return (PyObject *) self;
 }
 
+static PyObject *
+_struct_repr(PyGIStruct *self)
+{
+    PyObject* repr;
+    GIBaseInfo *info;
+    PyGPointer *pointer = (PyGPointer *)self;
+
+    info = _struct_get_info ((PyObject *)self);
+    if (info == NULL)
+        return NULL;
+
+    repr = PYGLIB_PyUnicode_FromFormat ("<%s.%s object at %p (%s at %p)>",
+                                        g_base_info_get_namespace (info),
+                                        g_base_info_get_name (info),
+                                        self, g_type_name (pointer->gtype),
+                                        pointer->pointer);
+
+    g_base_info_unref (info);
+
+    return repr;
+}
+
 void
 _pygi_struct_register_types (PyObject *m)
 {
@@ -168,6 +226,7 @@ _pygi_struct_register_types (PyObject *m)
     PyGIStruct_Type.tp_init = (initproc) _struct_init;
     PyGIStruct_Type.tp_dealloc = (destructor) _struct_dealloc;
     PyGIStruct_Type.tp_flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE);
+    PyGIStruct_Type.tp_repr = (reprfunc)_struct_repr;
 
     if (PyType_Ready (&PyGIStruct_Type))
         return;

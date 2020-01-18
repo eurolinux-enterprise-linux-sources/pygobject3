@@ -24,9 +24,14 @@
 
 #include <pyglib.h>
 
-#include "pygobject-private.h"
+#include "pygobject-object.h"
+#include "pygboxed.h"
+#include "pygenum.h"
+#include "pygflags.h"
 #include "pygparamspec.h"
 #include "pygtype.h"
+#include "pygpointer.h"
+#include "pyginterface.h"
 
 #include "pygi-type.h"
 #include "pygi-value.h"
@@ -704,7 +709,16 @@ pyg_closure_marshal(GClosure *closure,
 
 	    /* error condition */
 	    if (!item) {
-		goto out;
+            if (!PyErr_Occurred ())
+                PyErr_SetString (PyExc_TypeError,
+                                 "can't convert parameter to desired type");
+
+            if (pc->exception_handler)
+                pc->exception_handler (return_value, n_param_values, param_values);
+            else
+                PyErr_Print();
+
+            goto out;
 	    }
 	    PyTuple_SetItem(params, i, item);
 	}
@@ -934,26 +948,6 @@ pyg_signal_class_closure_get(void)
 	g_closure_sink(closure);
     }
     return closure;
-}
-
-GClosure *
-gclosure_from_pyfunc(PyGObject *object, PyObject *func)
-{
-    GSList *l;
-    PyGObjectData *inst_data;
-    inst_data = pyg_object_peek_inst_data(object->obj);
-    if (inst_data) {
-        for (l = inst_data->closures; l; l = l->next) {
-            PyGClosure *pyclosure = l->data;
-            int res = PyObject_RichCompareBool(pyclosure->callback, func, Py_EQ);
-            if (res == -1) {
-                PyErr_Clear(); /* Is there anything else to do? */
-            } else if (res) {
-                return (GClosure*)pyclosure;
-            }
-        }
-    }
-    return NULL;
 }
 
 /* ----- __doc__ descriptor for GObject and GInterface ----- */

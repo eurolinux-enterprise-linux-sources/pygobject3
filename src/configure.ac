@@ -17,12 +17,12 @@ m4_define(python3_min_ver, 3.1)
 
 dnl the pygobject version number
 m4_define(pygobject_major_version, 3)
-m4_define(pygobject_minor_version, 14)
+m4_define(pygobject_minor_version, 22)
 m4_define(pygobject_micro_version, 0)
 m4_define(pygobject_version, pygobject_major_version.pygobject_minor_version.pygobject_micro_version)
 
 dnl versions of packages we require ...
-m4_define(introspection_required_version, 1.39.0)
+m4_define(introspection_required_version, 1.46.0)
 m4_define(py2cairo_required_version, 1.2.0)
 m4_define(py3cairo_required_version, 1.10.0)
 m4_define(glib_required_version, 2.38.0)
@@ -44,7 +44,9 @@ AC_SUBST(PYGOBJECT_MICRO_VERSION, pygobject_micro_version)
 
 AC_CONFIG_HEADERS(config.h)
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES(yes)])
-AM_INIT_AUTOMAKE([1.11.1 foreign no-dist-gzip dist-xz])
+# 1.12.6 to get a py-compile supporting newer Python 3 versions.
+# See https://debbugs.gnu.org/cgi/bugreport.cgi?bug=8847
+AM_INIT_AUTOMAKE([1.12.6 foreign no-dist-gzip dist-xz])
 
 dnl put the ACLOCAL flags in the makefile
 ACLOCAL="$ACLOCAL $ACLOCAL_FLAGS"
@@ -241,15 +243,6 @@ if test "x$GCC" = "xyes"; then
   JH_ADD_CFLAG([-Werror=unused-variable])
   JH_ADD_CFLAG([-fno-strict-aliasing])
   JH_ADD_CFLAG([-Werror=declaration-after-statement])
-
-  case $host_os in
-  solaris*)
-    ;;
-  *)
-    JH_ADD_CFLAG([-std=c90])
-    ;;
-  esac
-
 fi
 
 CFLAGS="$CFLAGS $WARN_CFLAGS $CODE_COVERAGE_CFLAGS"

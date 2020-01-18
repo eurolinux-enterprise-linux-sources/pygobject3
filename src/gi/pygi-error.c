@@ -21,15 +21,16 @@
  */
 
 #include "pyglib.h"
-#include "pygi-private.h"
 #include "pygi-error.h"
+#include "pygtype.h"
+#include <pyglib-python-compat.h>
 
 
-static PyObject *PyGError = NULL;
+PyObject *PyGError = NULL;
 static PyObject *exception_table = NULL;
 
 /**
- * pygi_error_marshal:
+ * pygi_error_marshal_to_py:
  * @error: a pointer to the GError.
  *
  * Checks to see if @error has been set.  If @error has been set, then a
@@ -38,7 +39,7 @@ static PyObject *exception_table = NULL;
  * Returns: a GLib.GError Python exception object, or NULL.
  */
 PyObject *
-pygi_error_marshal (GError **error)
+pygi_error_marshal_to_py (GError **error)
 {
     PyGILState_STATE state;
     PyObject *exc_type;
@@ -97,7 +98,7 @@ pygi_error_check (GError **error)
 
     state = pyglib_gil_state_ensure();
 
-    exc_instance = pygi_error_marshal (error);
+    exc_instance = pygi_error_marshal_to_py (error);
     PyErr_SetObject(PyGError, exc_instance);
     Py_DECREF(exc_instance);
     g_clear_error(error);
@@ -105,6 +106,64 @@ pygi_error_check (GError **error)
     pyglib_gil_state_release(state);
 
     return TRUE;
+}
+
+/**
+ * pygi_error_marshal_from_py:
+ * @pyerr: A Python exception instance.
+ * @error: a standard GLib GError ** output parameter
+ *
+ * Converts from a Python implemented GError into a GError.
+ *
+ * Returns: TRUE if the conversion was successful, otherwise a Python exception
+ *          is set and FALSE is returned.
+ */
+gboolean
+pygi_error_marshal_from_py (PyObject *pyerr, GError **error)
+{
+    gboolean res = FALSE;
+    PyObject *py_message = NULL,
+             *py_domain = NULL,
+             *py_code = NULL;
+
+    if (PyObject_IsInstance (pyerr, PyGError) != 1) {
+        PyErr_Format (PyExc_TypeError, "Must be GLib.Error, not %s",
+                      pyerr->ob_type->tp_name);
+        return FALSE;
+    }
+
+    py_message = PyObject_GetAttrString (pyerr, "message");
+    if (!py_message || !PYGLIB_PyUnicode_Check (py_message)) {
+        PyErr_SetString (PyExc_ValueError,
+                         "GLib.Error instances must have a 'message' string attribute");
+        goto cleanup;
+    }
+
+    py_domain = PyObject_GetAttrString (pyerr, "domain");
+    if (!py_domain || !PYGLIB_PyUnicode_Check (py_domain)) {
+        PyErr_SetString (PyExc_ValueError,
+                         "GLib.Error instances must have a 'domain' string attribute");
+        goto cleanup;
+    }
+
+    py_code = PyObject_GetAttrString (pyerr, "code");
+    if (!py_code || !PYGLIB_PyLong_Check (py_code)) {
+        PyErr_SetString (PyExc_ValueError,
+                         "GLib.Error instances must have a 'code' int attribute");
+        goto cleanup;
+    }
+
+    res = TRUE;
+    g_set_error_literal (error,
+                         g_quark_from_string (PYGLIB_PyUnicode_AsString (py_domain)),
+                         PYGLIB_PyLong_AsLong (py_code),
+                         PYGLIB_PyUnicode_AsString (py_message));
+
+cleanup:
+    Py_XDECREF (py_message);
+    Py_XDECREF (py_code);
+    Py_XDECREF (py_domain);
+    return res;
 }
 
 /**
@@ -121,10 +180,8 @@ pygi_error_check (GError **error)
 gboolean
 pygi_gerror_exception_check (GError **error)
 {
+    int res = -1;
     PyObject *type, *value, *traceback;
-    PyObject *py_message, *py_domain, *py_code;
-    const char *bad_gerror_message;
-
     PyErr_Fetch(&type, &value, &traceback);
     if (type == NULL)
         return 0;
@@ -144,44 +201,14 @@ pygi_gerror_exception_check (GError **error)
     Py_DECREF(type);
     Py_XDECREF(traceback);
 
-    py_message = PyObject_GetAttrString(value, "message");
-    if (!py_message || !PYGLIB_PyUnicode_Check(py_message)) {
-        bad_gerror_message = "GLib.Error instances must have a 'message' string attribute";
-        Py_XDECREF(py_message);
-        goto bad_gerror;
+    if (!pygi_error_marshal_from_py (value, error)) {
+        PyErr_Print();
+        res = -2;
     }
 
-    py_domain = PyObject_GetAttrString(value, "domain");
-    if (!py_domain || !PYGLIB_PyUnicode_Check(py_domain)) {
-        bad_gerror_message = "GLib.Error instances must have a 'domain' string attribute";
-        Py_DECREF(py_message);
-        Py_XDECREF(py_domain);
-        goto bad_gerror;
-    }
-
-    py_code = PyObject_GetAttrString(value, "code");
-    if (!py_code || !PYGLIB_PyLong_Check(py_code)) {
-        bad_gerror_message = "GLib.Error instances must have a 'code' int attribute";
-        Py_DECREF(py_message);
-        Py_DECREF(py_domain);
-        Py_XDECREF(py_code);
-        goto bad_gerror;
-    }
-
-    g_set_error(error, g_quark_from_string(PYGLIB_PyUnicode_AsString(py_domain)),
-                PYGLIB_PyLong_AsLong(py_code), "%s", PYGLIB_PyUnicode_AsString(py_message));
-
-    Py_DECREF(py_message);
-    Py_DECREF(py_code);
-    Py_DECREF(py_domain);
-    return -1;
-
-bad_gerror:
     Py_DECREF(value);
-    g_set_error(error, g_quark_from_static_string("pygi"), 0, "%s", bad_gerror_message);
-    PyErr_SetString(PyExc_ValueError, bad_gerror_message);
-    PyErr_Print();
-    return -2;
+    return res;
+
 }
 
 /**
@@ -221,9 +248,27 @@ _pygi_marshal_from_py_gerror (PyGIInvokeState   *state,
                               GIArgument        *arg,
                               gpointer          *cleanup_data)
 {
-    PyErr_Format (PyExc_NotImplementedError,
-                  "Marshalling for GErrors is not implemented");
-    return FALSE;
+    GError *error = NULL;
+    if (pygi_error_marshal_from_py (py_arg, &error)) {
+        arg->v_pointer = error;
+        *cleanup_data = error;
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+
+
+static void
+_pygi_marshal_from_py_gerror_cleanup  (PyGIInvokeState *state,
+                                       PyGIArgCache    *arg_cache,
+                                       PyObject        *py_arg,
+                                       gpointer         data,
+                                       gboolean         was_processed)
+{
+    if (was_processed) {
+        g_error_free ((GError *)data);
+    }
 }
 
 static PyObject *
@@ -235,7 +280,7 @@ _pygi_marshal_to_py_gerror (PyGIInvokeState   *state,
     GError *error = arg->v_pointer;
     PyObject *py_obj = NULL;
 
-    py_obj = pygi_error_marshal (&error);
+    py_obj = pygi_error_marshal_to_py (&error);
 
     if (arg_cache->transfer == GI_TRANSFER_EVERYTHING && error != NULL) {
         g_error_free (error);
@@ -261,7 +306,11 @@ pygi_arg_gerror_setup_from_info (PyGIArgCache  *arg_cache,
 
     if (direction & PYGI_DIRECTION_FROM_PYTHON) {
         arg_cache->from_py_marshaller = _pygi_marshal_from_py_gerror;
-        arg_cache->meta_type = PYGI_META_ARG_TYPE_CHILD;
+
+        /* Assign cleanup function if we manage memory after call completion. */
+        if (arg_cache->transfer == GI_TRANSFER_NOTHING) {
+            arg_cache->from_py_cleanup = _pygi_marshal_from_py_gerror_cleanup;
+        }
     }
 
     if (direction & PYGI_DIRECTION_TO_PYTHON) {
@@ -298,6 +347,31 @@ pygi_arg_gerror_new_from_info (GITypeInfo   *type_info,
     }
 }
 
+static PyObject *
+pygerror_from_gvalue (const GValue *value)
+{
+    GError *gerror = (GError *) g_value_get_boxed (value);
+    PyObject *pyerr = pygi_error_marshal_to_py (&gerror);
+    if (pyerr == NULL) {
+        Py_RETURN_NONE;
+    } else {
+        return pyerr;
+    }
+}
+
+static int
+pygerror_to_gvalue (GValue *value, PyObject *pyerror)
+{
+    GError *gerror = NULL;
+
+    if (pygi_error_marshal_from_py (pyerror, &gerror)) {
+        g_value_take_boxed (value, gerror);
+        return 0;
+    }
+
+    return -1;
+}
+
 void
 pygi_error_register_types (PyObject *module)
 {
@@ -308,5 +382,9 @@ pygi_error_register_types (PyObject *module)
 
     /* Stash a reference to the Python implemented gi._error.GError. */
     PyGError = PyObject_GetAttrString (error_module, "GError");
+
+    pyg_register_gtype_custom (G_TYPE_ERROR,
+                               pygerror_from_gvalue,
+                               pygerror_to_gvalue);
 }
 

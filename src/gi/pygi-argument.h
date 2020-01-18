@@ -37,22 +37,10 @@ gssize _pygi_argument_array_length_marshal (gsize length_arg_index,
                                             void *user_data2);
 
 gpointer _pygi_arg_to_hash_pointer (const GIArgument *arg,
-                                    GITypeTag         type_tag);
+                                    GITypeInfo       *type_info);
 
 void _pygi_hash_pointer_to_arg (GIArgument *arg,
-                                GITypeTag   type_tag);
-
-gint _pygi_g_type_interface_check_object (GIBaseInfo *info,
-                                          PyObject   *object);
-
-gint _pygi_g_type_info_check_object (GITypeInfo *type_info,
-                                     PyObject   *object,
-                                     gboolean   allow_none);
-
-gint _pygi_g_registered_type_info_check_object (GIRegisteredTypeInfo *info,
-                                                gboolean              is_instance,
-                                                PyObject             *object);
-
+                                GITypeInfo *type_info);
 
 GArray* _pygi_argument_to_array (GIArgument  *arg,
                                  PyGIArgArrayLengthPolicy array_length_policy,
@@ -73,8 +61,6 @@ void _pygi_argument_release (GIArgument   *arg,
                              GITypeInfo  *type_info,
                              GITransfer   transfer,
                              GIDirection  direction);
-
-void _pygi_argument_init (void);
 
 gboolean pygi_argument_to_gssize (GIArgument *arg_in,
                                   GITypeTag  type_tag,

@@ -23,10 +23,10 @@
 #endif
 
 #include <pyglib.h>
-#include "pygobject-private.h"
+#include <glib-object.h>
 #include "pygpointer.h"
+#include "pygtype.h"
 
-#include "pygi.h"
 #include "pygi-type.h"
 
 
